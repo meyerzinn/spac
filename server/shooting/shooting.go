@@ -47,26 +47,24 @@ func (s *System) Update(delta float64) {
 		if e.Component.Armed() && e.controller.Controls().Shooting {
 			var bullet bullet
 			bullet.Owner = owner
-			s.manager.NewEntity(func(id entity.ID, systems []entity.System) {
-				bullet.ID = id
-				for _, system := range systems {
-					switch sys := system.(type) {
-					case *physics.System:
-						s.world.Do(func(space *cp.Space) {
-							bullet.Physics.Body = space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 12, cp.Vector{})))
-							bulletShape := space.AddShape(cp.NewCircle(bullet.Physics.Body, 12, cp.Vector{}))
-							bulletShape.SetFilter(cp.NewShapeFilter(uint(owner), cp.ALL_CATEGORIES, cp.ALL_CATEGORIES))
-							bullet.Physics.SetAngle(e.physics.Angle())
-							bullet.Physics.SetVelocityVector(bullet.Physics.Rotation().Rotate(cp.Vector{0, e.BulletVelocity}))
-						})
-						sys.Add(id, bullet.Physics)
-					case *despawning.System:
-						sys.Add(id, 120)
-					case *perceiving.System:
-						sys.AddPerceivable(id, &bullet)
-					}
+			bullet.ID = s.manager.NewEntity()
+			for _, system := range s.manager.Systems() {
+				switch sys := system.(type) {
+				case *physics.System:
+					s.world.Do(func(space *cp.Space) {
+						bullet.Physics.Body = space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 12, cp.Vector{})))
+						bulletShape := space.AddShape(cp.NewCircle(bullet.Physics.Body, 12, cp.Vector{}))
+						bulletShape.SetFilter(cp.NewShapeFilter(uint(owner), cp.ALL_CATEGORIES, cp.ALL_CATEGORIES))
+						bullet.Physics.SetAngle(e.physics.Angle())
+						bullet.Physics.SetVelocityVector(bullet.Physics.Rotation().Rotate(cp.Vector{0, e.BulletVelocity}))
+					})
+					sys.Add(bullet.ID, bullet.Physics)
+				case *despawning.System:
+					sys.Add(bullet.ID, 120)
+				case *perceiving.System:
+					sys.AddPerceivable(bullet.ID, &bullet)
 				}
-			})
+			}
 		}
 	}
 }

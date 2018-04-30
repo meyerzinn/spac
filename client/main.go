@@ -28,7 +28,5 @@ import (
 )
 
 func main() {
-	pixelgl.Run(func() {
-		cmd.Execute()
-	})
+	pixelgl.Run(cmd.Execute)
 }

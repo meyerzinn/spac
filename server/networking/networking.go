@@ -132,38 +132,36 @@ func (s *System) Add(conn Connection) {
 							Cooldown: 1 * time.Second,
 						},
 					}
-					s.manager.NewEntity(func(id entity.ID, systems []entity.System) {
-						ship.ID = id
-						nete := &networkingEntity{
-							Connection:  conn,
-							known:       make(map[entity.ID]struct{}),
-							moveInputs:  &moveInputs{moveInputs: queue.NewRingBuffer(4)},
-							shootInputs: &shootInputs{shootInputs: queue.NewRingBuffer(4)},
-							filter:      cp.NewShapeFilter(uint(id), 0, cp.ALL_CATEGORIES),
+					ship.ID = s.manager.NewEntity()
+					nete := &networkingEntity{
+						Connection:  conn,
+						known:       make(map[entity.ID]struct{}),
+						moveInputs:  &moveInputs{moveInputs: queue.NewRingBuffer(4)},
+						shootInputs: &shootInputs{shootInputs: queue.NewRingBuffer(4)},
+						filter:      cp.NewShapeFilter(uint(ship.ID), 0, cp.ALL_CATEGORIES),
+					}
+					for _, system := range s.manager.Systems() {
+						switch sys := system.(type) {
+						case *physics.System:
+							s.world.Do(func(space *cp.Space) {
+								ship.Physics = physics.Component{Body: space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))}
+								shipShape := space.AddShape(cp.NewPolyShape(ship.Physics.Body, 3, shipVertices, cp.NewTransformIdentity(), 0))
+								shipShape.SetFilter(cp.NewShapeFilter(uint(ship.ID), uint(perceiving.CollisionType), cp.ALL_CATEGORIES))
+							})
+							sys.Add(ship.ID, ship.Physics)
+						case *perceiving.System:
+							sys.AddPerceiver(ship.ID, &ship)
+							sys.AddPerceivable(ship.ID, &ship)
+						case *movement.System:
+							sys.Add(ship.ID, nete.moveInputs, ship.Physics, 200, 0.03)
+						case *shooting.System:
+							sys.Add(ship.ID, nete.shootInputs, ship.Physics, ship.Shooting)
 						}
-						for _, system := range s.manager.Systems() {
-							switch sys := system.(type) {
-							case *physics.System:
-								s.world.Do(func(space *cp.Space) {
-									ship.Physics = physics.Component{Body: space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))}
-									shipShape := space.AddShape(cp.NewPolyShape(ship.Physics.Body, 3, shipVertices, cp.NewTransformIdentity(), 0))
-									shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(perceiving.CollisionType), cp.ALL_CATEGORIES))
-								})
-								sys.Add(id, ship.Physics)
-							case *perceiving.System:
-								sys.AddPerceiver(id, &ship)
-								sys.AddPerceivable(id, &ship)
-							case *movement.System:
-								sys.Add(id, nete.moveInputs, ship.Physics, 200, 0.03)
-							case *shooting.System:
-								sys.Add(id, nete.shootInputs, ship.Physics, ship.Shooting)
-							}
-						}
-						s.stateMu.Lock()
-						s.entities[id] = nete
-						s.lookup[conn] = id
-						s.stateMu.Unlock()
-					})
+					}
+					s.stateMu.Lock()
+					s.entities[ship.ID] = nete
+					s.lookup[conn] = ship.ID
+					s.stateMu.Unlock()
 				case fbs.PacketControls:
 					s.stateMu.RLock()
 					if id, ok := s.lookup[conn]; ok {
