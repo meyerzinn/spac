@@ -1,0 +1,14 @@
+include "server.fbs";
+include "spawn.fbs";
+include "perception.fbs";
+include "controls.fbs";
+
+namespace spac;
+
+union Packet { Server, Spawn, Perception, Controls }
+
+table Message {
+  packet:Packet;
+}
+
+root_type Message;
