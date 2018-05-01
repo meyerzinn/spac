@@ -5,7 +5,7 @@ import (
 	"sync"
 	"github.com/google/flatbuffers/go"
 	"fmt"
-	"github.com/20zinnm/spac/server/networking/fbs"
+	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/spac/common/physics"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/jakecoffman/cp"
@@ -16,18 +16,24 @@ import (
 	"github.com/20zinnm/spac/server/perceiving"
 	"time"
 	"math"
-)
-
-var (
-	shipVertices = []cp.Vector{{-24, -20}, {24, -20}, {0, 40},}
+	"github.com/20zinnm/spac/common/net"
+	"github.com/20zinnm/spac/server/networking/builders"
 )
 
 type networkingEntity struct {
-	Connection
+	net.Connection
 	filter      cp.ShapeFilter
 	moveInputs  *moveInputs
 	shootInputs *shootInputs
 	known       map[entity.ID]struct{}
+}
+
+func (ne *networkingEntity) sendSpawn(id entity.ID) {
+	b := builders.Get()
+	fbs.SpawnStart(b)
+	fbs.SpawnAddId(b, id)
+	ne.Connection.Write(net.Message(b, fbs.SpawnEnd(b), fbs.PacketSpawn))
+	builders.Put(b)
 }
 
 type moveInputs struct {
@@ -67,14 +73,14 @@ type System struct {
 	// stateMu guards connections, entities, and lookup
 	stateMu  sync.RWMutex
 	entities map[entity.ID]*networkingEntity
-	lookup   map[Connection]entity.ID
+	lookup   map[net.Connection]entity.ID
 }
 
 func New(manager *entity.Manager, world *world.World) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
-		lookup:   make(map[Connection]entity.ID),
+		lookup:   make(map[net.Connection]entity.ID),
 		entities: make(map[entity.ID]*networkingEntity),
 	}
 }
@@ -90,11 +96,11 @@ func (s *System) Remove(entity entity.ID) {
 	}
 }
 
-func (s *System) Add(conn Connection) {
+func (s *System) Add(conn net.Connection) {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
-	go func(conn Connection) {
+	go func(conn net.Connection) {
 		defer func() {
 			if err := recover(); err != nil {
 				fmt.Println("encountered error decoding client message", err)
@@ -117,10 +123,10 @@ func (s *System) Add(conn Connection) {
 			if message.Packet(packetTable) {
 				switch message.PacketType() {
 				case fbs.PacketNONE:
-				case fbs.PacketSpawn:
-					spawn := new(fbs.Spawn)
-					spawn.Init(packetTable.Bytes, packetTable.Pos)
-					name := string(spawn.Name())
+				case fbs.PacketPlay:
+					play := new(fbs.Play)
+					play.Init(packetTable.Bytes, packetTable.Pos)
+					name := string(play.Name())
 					if name == "" {
 						name = "An Unnamed Ship"
 					}
@@ -144,9 +150,7 @@ func (s *System) Add(conn Connection) {
 						switch sys := system.(type) {
 						case *physics.System:
 							s.world.Do(func(space *cp.Space) {
-								ship.Physics = physics.Component{Body: space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))}
-								shipShape := space.AddShape(cp.NewPolyShape(ship.Physics.Body, 3, shipVertices, cp.NewTransformIdentity(), 0))
-								shipShape.SetFilter(cp.NewShapeFilter(uint(ship.ID), uint(perceiving.CollisionType), cp.ALL_CATEGORIES))
+								ship.Physics = physics.NewShip(space, ship.ID)
 							})
 							sys.Add(ship.ID, ship.Physics)
 						case *perceiving.System:
@@ -181,7 +185,7 @@ type ship struct {
 	ID       entity.ID
 	Name     string
 	Physics  physics.Component
-	Conn     Connection
+	Conn     net.Connection
 	Shooting *shooting.Component
 	Health   *health.Component
 	Movement *movement.Controls

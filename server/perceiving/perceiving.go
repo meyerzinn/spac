@@ -6,8 +6,10 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/20zinnm/spac/server/networking/builders"
-	"github.com/20zinnm/spac/server/networking/fbs"
+	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/entity"
+
+	"github.com/20zinnm/spac/common/net"
 )
 
 const CollisionType cp.CollisionType = 1 << 2
@@ -101,22 +103,11 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 	entities := b.EndVector(len(snapshots))
 	fbs.PerceptionStart(b)
 	fbs.PerceptionAddEntities(b, entities)
-	go perceiver.Perceive(messageC(b, fbs.PerceptionEnd(b), fbs.PacketPerception))
+	perceiver.Perceive(net.Message(b, fbs.PerceptionEnd(b), fbs.PacketPerception))
 }
 
 func (s *System) Remove(entity entity.ID) {
 	s.perceiversMu.Lock()
 	delete(s.perceivers, entity)
 	s.perceiversMu.Unlock()
-}
-
-func messageC(builder *flatbuffers.Builder, packet flatbuffers.UOffsetT, packetType byte) []byte {
-	fbs.MessageStart(builder)
-	fbs.MessageAddPacket(builder, packet)
-	fbs.MessageAddPacketType(builder, packetType)
-	m := fbs.MessageEnd(builder)
-	builder.Finish(m)
-	var bytes = make([]byte, len(builder.FinishedBytes()))
-	copy(bytes, builder.FinishedBytes())
-	return bytes
 }

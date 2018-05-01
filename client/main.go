@@ -24,9 +24,8 @@ package main
 
 import (
 	"github.com/20zinnm/spac/client/cmd"
-	"github.com/faiface/pixel/pixelgl"
 )
 
 func main() {
-	pixelgl.Run(cmd.Execute)
+	cmd.Execute()
 }

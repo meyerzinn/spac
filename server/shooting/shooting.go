@@ -6,7 +6,7 @@ import (
 	"sync"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/server/networking/fbs"
+	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/spac/server/despawning"
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/server/perceiving"

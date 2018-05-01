@@ -40,6 +40,7 @@ import (
 	"github.com/20zinnm/spac/common/physics"
 	"github.com/20zinnm/spac/server/shooting"
 	"log"
+	"github.com/20zinnm/spac/common/net"
 )
 
 var cfgFile string
@@ -108,7 +109,7 @@ var rootCmd = &cobra.Command{
 				fmt.Println("error upgrading connection", err)
 				return
 			}
-			netwk.Add(networking.Websocket(conn))
+			netwk.Add(net.Websocket(conn))
 			fmt.Println("client connected")
 		}))
 		log.Fatal(http.ListenAndServe(addr, nil))

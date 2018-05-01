@@ -23,47 +23,66 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/faiface/pixel/pixelgl"
-	"github.com/faiface/pixel"
-	"github.com/20zinnm/entity"
-	"github.com/20zinnm/spac/common/physics"
-	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/jakecoffman/cp"
+	"github.com/20zinnm/spac/common/physics/world"
+	"github.com/20zinnm/spac/common/physics"
+	"os"
+	"os/signal"
+	"time"
+	"github.com/20zinnm/entity"
+	"github.com/faiface/pixel"
+	"github.com/20zinnm/spac/client/rendering"
+	"github.com/20zinnm/spac/client/networking"
+)
+
+var (
+	host = "localhost:8080"
 )
 
 // desktopCmd represents the desktop command
 var desktopCmd = &cobra.Command{
 	Use:   "desktop",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Run the spac desktop client",
+	//Long: ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		var manager entity.Manager
-		cfg := pixelgl.WindowConfig{
-			Title:  "spac",
-			Bounds: pixel.R(0, 0, 1024, 768),
-			VSync:  true,
-		}
-		win, err := pixelgl.NewWindow(cfg)
-		if err != nil {
-			panic(err)
-		}
+		pixelgl.Run(func() {
+			cfg := pixelgl.WindowConfig{
+				Title:  "spac",
+				Bounds: pixel.R(0, 0, 1024, 768),
+				VSync:  true,
+			}
+			win, err := pixelgl.NewWindow(cfg)
+			if err != nil {
+				panic(err)
+			}
 
-		space := cp.NewSpace()
-		world := world.New(space)
-		physics := physics.New(&manager, world)
-		manager.AddSystem(physics)
-		//manager.AddSystem(rendering.New(win, ))
-
+			var manager entity.Manager
+			manager.AddSystem(rendering.New(win))
+			manager.AddSystem(networking.New(&manager, win, host))
+			done := make(chan struct{})
+			interrupt := make(chan os.Signal, 1)
+			signal.Notify(interrupt, os.Interrupt)
+			start := time.Now()
+			for {
+				select {
+				case <-interrupt:
+					close(done)
+					return
+				default:
+					t := time.Now()
+					delta := t.Sub(start).Seconds()
+					start = t
+					manager.Update(delta)
+				}
+			}
+		})
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(desktopCmd)
 
+	desktopCmd.Flags().StringVar(&host, "host", "localhost:8080", "Host to connect to.")
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command

@@ -1,0 +1,5 @@
+namespace spac;
+
+table Server {
+  worldRadius:float64;
+}
