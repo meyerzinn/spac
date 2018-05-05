@@ -30,7 +30,6 @@ import (
 	"time"
 	"github.com/gorilla/websocket"
 	"net/http"
-	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/server/movement"
@@ -65,12 +64,7 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		var manager entity.Manager
-		// set up space
-		space := cp.NewSpace()
-		// > rules
-		space.SetDamping(0.3)
-		space.SetGravity(cp.Vector{0, 0})
-
+		space := physics.NewSpace()
 		world := world.New(space)
 		manager.AddSystem(health.New(space))
 		manager.AddSystem(movement.New(world))

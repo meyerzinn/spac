@@ -5,7 +5,7 @@ import (
 	"github.com/jakecoffman/cp"
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/common/physics/world"
-	"github.com/20zinnm/spac/server/networking/builders"
+	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/entity"
 

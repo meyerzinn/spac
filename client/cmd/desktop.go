@@ -23,20 +23,21 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/faiface/pixel/pixelgl"
-	"github.com/jakecoffman/cp"
-	"github.com/20zinnm/spac/common/physics/world"
-	"github.com/20zinnm/spac/common/physics"
 	"os"
 	"os/signal"
 	"time"
 	"github.com/20zinnm/entity"
 	"github.com/faiface/pixel"
 	"github.com/20zinnm/spac/client/rendering"
-	"github.com/20zinnm/spac/client/networking"
 )
 
 var (
 	host = "localhost:8080"
+)
+
+var (
+	manager entity.Manager
+	window  *pixelgl.Window
 )
 
 // desktopCmd represents the desktop command
@@ -46,6 +47,7 @@ var desktopCmd = &cobra.Command{
 	//Long: ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		pixelgl.Run(func() {
+
 			cfg := pixelgl.WindowConfig{
 				Title:  "spac",
 				Bounds: pixel.R(0, 0, 1024, 768),
@@ -55,10 +57,11 @@ var desktopCmd = &cobra.Command{
 			if err != nil {
 				panic(err)
 			}
+			window = win
 
-			var manager entity.Manager
-			manager.AddSystem(rendering.New(win))
-			manager.AddSystem(networking.New(&manager, win, host))
+			renderer := rendering.NewRenderer(win)
+			manager.AddSystem(renderer)
+
 			done := make(chan struct{})
 			interrupt := make(chan os.Signal, 1)
 			signal.Notify(interrupt, os.Interrupt)

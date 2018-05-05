@@ -17,7 +17,7 @@ import (
 	"time"
 	"math"
 	"github.com/20zinnm/spac/common/net"
-	"github.com/20zinnm/spac/server/networking/builders"
+	"github.com/20zinnm/spac/common/net/builders"
 )
 
 type networkingEntity struct {
