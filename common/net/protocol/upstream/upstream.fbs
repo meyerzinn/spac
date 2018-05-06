@@ -1,0 +1,12 @@
+include "spawn.fbs";
+include "controls.fbs";
+
+namespace spac.upstream;
+
+union Packet { Spawn, Controls }
+
+table Message {
+  packet:Packet;
+}
+
+root_type Message;

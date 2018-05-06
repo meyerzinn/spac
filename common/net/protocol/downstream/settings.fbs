@@ -1,0 +1,5 @@
+namespace spac.downstream;
+
+table ServerSettings {
+  worldRadius:float64;
+}

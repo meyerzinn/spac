@@ -1,0 +1,13 @@
+include "settings.fbs";
+include "spawn.fbs";
+include "perception.fbs";
+
+namespace spac.downstream;
+
+union Packet {ServerSettings, Spawn, Perception}
+
+table Message {
+  packet:Packet;
+}
+
+root_type Message;

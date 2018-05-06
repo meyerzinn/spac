@@ -6,10 +6,10 @@ import (
 	"sync"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/spac/server/despawning"
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/server/perceiving"
+	"github.com/20zinnm/spac/common/net/downstream"
 )
 
 type shootingEntity struct {
@@ -52,7 +52,7 @@ func (s *System) Update(delta float64) {
 				switch sys := system.(type) {
 				case *physics.System:
 					s.world.Do(func(space *cp.Space) {
-						bullet.Physics.Body = space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 12, cp.Vector{})))
+						bullet.Physics.Body = space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 8, cp.Vector{})))
 						bulletShape := space.AddShape(cp.NewCircle(bullet.Physics.Body, 12, cp.Vector{}))
 						bulletShape.SetFilter(cp.NewShapeFilter(uint(owner), cp.ALL_CATEGORIES, cp.ALL_CATEGORIES))
 						bullet.Physics.SetAngle(e.physics.Angle())
@@ -82,10 +82,10 @@ type bullet struct {
 }
 
 func (b *bullet) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
-	fbs.BulletStart(builder)
+	downstream.BulletStart(builder)
 	position := b.Physics.Position()
-	fbs.BulletAddPosition(builder, fbs.CreatePoint(builder, int32(position.X), int32(position.Y)))
+	downstream.BulletAddPosition(builder, downstream.CreatePoint(builder, int32(position.X), int32(position.Y)))
 	velocity := b.Physics.Velocity()
-	fbs.BulletAddVelocity(builder, fbs.CreateVector(builder, float32(velocity.X), float32(velocity.Y)))
-	return fbs.BulletEnd(builder)
+	downstream.BulletAddVelocity(builder, downstream.CreateVector(builder, float32(velocity.X), float32(velocity.Y)))
+	return downstream.BulletEnd(builder)
 }

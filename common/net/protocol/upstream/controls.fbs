@@ -1,0 +1,8 @@
+namespace spac.upstream;
+
+table Controls {
+  left:bool;
+  right:bool;
+  thrusting:bool;
+  shooting:bool;
+}

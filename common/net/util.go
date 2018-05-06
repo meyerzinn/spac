@@ -2,15 +2,24 @@ package net
 
 import (
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/net/fbs"
+	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/common/net/upstream"
 )
 
-func Message(builder *flatbuffers.Builder, packet flatbuffers.UOffsetT, packetType byte) []byte {
-	fbs.MessageStart(builder)
-	fbs.MessageAddPacket(builder, packet)
-	fbs.MessageAddPacketType(builder, packetType)
-	m := fbs.MessageEnd(builder)
+func MessageDown(builder *flatbuffers.Builder, packetType byte, packet flatbuffers.UOffsetT ) []byte {
+	downstream.MessageStart(builder)
+	downstream.MessageAddPacket(builder, packet)
+	downstream.MessageAddPacketType(builder, packetType)
+	m := downstream.MessageEnd(builder)
 	builder.Finish(m)
 	return builder.FinishedBytes()
 }
 
+func MessageUp(builder *flatbuffers.Builder, packetType byte, packet flatbuffers.UOffsetT) []byte {
+	upstream.MessageStart(builder)
+	upstream.MessageAddPacket(builder, packet)
+	upstream.MessageAddPacketType(builder, packetType)
+	m := upstream.MessageEnd(builder)
+	builder.Finish(m)
+	return builder.FinishedBytes()
+}

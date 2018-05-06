@@ -15,9 +15,10 @@ type System struct {
 	entities   map[entity.ID]Component
 }
 
-func New(manager *entity.Manager, world *world.World) *System {
+func New(manager *entity.Manager, world *world.World, radius float64) *System {
 	return &System{
 		world:    world,
+		radius:   radius,
 		entities: make(map[entity.ID]Component),
 		manager:  manager,
 	}

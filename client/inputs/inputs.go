@@ -18,22 +18,15 @@ func (h HandlerFunc) Handle(c Controls) {
 type System struct {
 	window  *pixelgl.Window
 	handler Handler
-	//last    Controls
-	//queue   chan Controls
+	last    Controls
 }
 
 func New(window *pixelgl.Window, handler Handler) *System {
 	return &System{
 		window:  window,
 		handler: handler,
-		//queue:   make(chan Controls, 1), // buffer one so rendering doesn't block on this
 	}
 }
-
-//
-//func (s *System) Set(c Controls) {
-//	s.queue <- c
-//}
 
 func (s *System) Update(delta float64) {
 	if !s.window.Closed() {
@@ -50,31 +43,11 @@ func (s *System) Update(delta float64) {
 		if s.window.Pressed(pixelgl.MouseButton1) {
 			controls.Shoot = true
 		}
-		s.handler.Handle(controls)
+		if controls != s.last {
+			s.handler.Handle(controls)
+		}
 	}
-	//select {
-	//case controls := <-s.queue:
-	//	if s.last == controls {
-	//		return
-	//	}
-	//	s.last = controls
-	//	b := builders.Get()
-	//	fbs.ControlsStart(b)
-	//	fbs.ControlsAddLeft(b, boolToByte(controls.Left))
-	//	fbs.ControlsAddRight(b, boolToByte(controls.Right))
-	//	fbs.ControlsAddThrusting(b, boolToByte(controls.Thrust))
-	//	fbs.ControlsAddShooting(b, boolToByte(controls.Shoot))
-	//	go s.conn.Write(net.Message(b, fbs.ControlsEnd(b), fbs.PacketControls))
-	//}
 }
-
-//func boolToByte(val bool) byte {
-//	if val {
-//		return 1
-//	} else {
-//		return 0
-//	}
-//}
 
 func (s *System) Remove(_ entity.ID) {
 	return

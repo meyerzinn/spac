@@ -6,10 +6,9 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/20zinnm/spac/common/net/builders"
-	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/entity"
-
 	"github.com/20zinnm/spac/common/net"
+	"github.com/20zinnm/spac/common/net/downstream"
 )
 
 const CollisionType cp.CollisionType = 1 << 2
@@ -96,14 +95,14 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 			perceiver.known[id] = struct{}{}
 		}
 	}
-	fbs.PerceptionStartEntitiesVector(b, len(snapshots))
+	downstream.PerceptionStartEntitiesVector(b, len(snapshots))
 	for _, snapshot := range snapshots {
 		b.PrependUOffsetT(snapshot)
 	}
 	entities := b.EndVector(len(snapshots))
-	fbs.PerceptionStart(b)
-	fbs.PerceptionAddEntities(b, entities)
-	perceiver.Perceive(net.Message(b, fbs.PerceptionEnd(b), fbs.PacketPerception))
+	downstream.PerceptionStart(b)
+	downstream.PerceptionAddEntities(b, entities)
+	go perceiver.Perceive(net.MessageDown(b, downstream.PacketPerception, downstream.PerceptionEnd(b)))
 }
 
 func (s *System) Remove(entity entity.ID) {

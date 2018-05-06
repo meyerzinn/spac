@@ -1,8 +1,0 @@
-namespace spac;
-
-table Controls {
-    left:bool;
-    right:bool;
-    thrusting:bool;
-    shooting:bool;
-}

@@ -23,21 +23,10 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/faiface/pixel/pixelgl"
-	"os"
-	"os/signal"
-	"time"
-	"github.com/20zinnm/entity"
-	"github.com/faiface/pixel"
-	"github.com/20zinnm/spac/client/rendering"
 )
 
 var (
 	host = "localhost:8080"
-)
-
-var (
-	manager entity.Manager
-	window  *pixelgl.Window
 )
 
 // desktopCmd represents the desktop command
@@ -48,36 +37,25 @@ var desktopCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		pixelgl.Run(func() {
 
-			cfg := pixelgl.WindowConfig{
-				Title:  "spac",
-				Bounds: pixel.R(0, 0, 1024, 768),
-				VSync:  true,
-			}
-			win, err := pixelgl.NewWindow(cfg)
-			if err != nil {
-				panic(err)
-			}
-			window = win
 
-			renderer := rendering.NewRenderer(win)
-			manager.AddSystem(renderer)
 
-			done := make(chan struct{})
-			interrupt := make(chan os.Signal, 1)
-			signal.Notify(interrupt, os.Interrupt)
-			start := time.Now()
-			for {
-				select {
-				case <-interrupt:
-					close(done)
-					return
-				default:
-					t := time.Now()
-					delta := t.Sub(start).Seconds()
-					start = t
-					manager.Update(delta)
-				}
-			}
+			//
+			//done := make(chan struct{})
+			//interrupt := make(chan os.Signal, 1)
+			//signal.Notify(interrupt, os.Interrupt)
+			//start := time.Now()
+			//for {
+			//	select {
+			//	case <-interrupt:
+			//		close(done)
+			//		return
+			//	default:
+			//		t := time.Now()
+			//		delta := t.Sub(start).Seconds()
+			//		start = t
+			//		manager.Update(delta)
+			//	}
+			//}
 		})
 	},
 }

@@ -1,9 +1,0 @@
-namespace spac;
-
-table Play {
-  name:string;
-}
-
-table Spawn {
-  id:uint64;
-}

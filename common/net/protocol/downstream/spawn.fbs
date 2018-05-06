@@ -1,0 +1,5 @@
+namespace spac.downstream;
+
+table Spawn {
+  id:uint64;
+}

@@ -69,9 +69,9 @@ var rootCmd = &cobra.Command{
 		manager.AddSystem(health.New(space))
 		manager.AddSystem(movement.New(world))
 		manager.AddSystem(shooting.New(&manager, world))
-		manager.AddSystem(physics.New(&manager, world))
+		manager.AddSystem(physics.New(&manager, world, worldRadius))
 		manager.AddSystem(perceiving.New(world))
-		netwk := networking.New(&manager, world)
+		netwk := networking.New(&manager, world, worldRadius)
 		manager.AddSystem(netwk)
 		go func() {
 			var ticks int64

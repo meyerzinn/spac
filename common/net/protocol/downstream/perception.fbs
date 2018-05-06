@@ -1,0 +1,37 @@
+namespace spac.downstream;
+
+struct Point {
+    x:int;
+    y:int;
+}
+
+struct Vector {
+    x:float;
+    y:float;
+}
+
+table Ship {
+    id:uint64;
+    position:Point;
+    rotation:float;
+    thrusting:bool;
+    armed:bool;
+    health:int16;
+    name:string;
+}
+
+table Bullet {
+    id:uint64;
+    position:Point;
+    velocity:Vector;
+}
+
+union Snapshot { Ship, Bullet }
+
+table Entity {
+    snapshot:Snapshot;
+}
+
+table Perception {
+    entities:[Entity];
+}

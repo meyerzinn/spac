@@ -5,7 +5,6 @@ import (
 	"sync"
 	"github.com/google/flatbuffers/go"
 	"fmt"
-	"github.com/20zinnm/spac/common/net/fbs"
 	"github.com/20zinnm/spac/common/physics"
 	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/jakecoffman/cp"
@@ -18,6 +17,8 @@ import (
 	"math"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/builders"
+	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/common/net/upstream"
 )
 
 type networkingEntity struct {
@@ -28,12 +29,20 @@ type networkingEntity struct {
 	known       map[entity.ID]struct{}
 }
 
-func (ne *networkingEntity) sendSpawn(id entity.ID) {
+func sendSettings(conn net.Connection, radius float64) {
 	b := builders.Get()
-	fbs.SpawnStart(b)
-	fbs.SpawnAddId(b, id)
-	ne.Connection.Write(net.Message(b, fbs.SpawnEnd(b), fbs.PacketSpawn))
-	builders.Put(b)
+	defer builders.Put(b)
+	downstream.ServerSettingsStart(b)
+	downstream.ServerSettingsAddWorldRadius(b, radius)
+	conn.Write(net.MessageDown(b, downstream.PacketServerSettings, downstream.ServerSettingsEnd(b)))
+}
+
+func sendSpawn(conn net.Connection, id entity.ID) {
+	b := builders.Get()
+	defer builders.Put(b)
+	downstream.SpawnStart(b)
+	downstream.SpawnAddId(b, id)
+	conn.Write(net.MessageDown(b, downstream.PacketSpawn, downstream.SpawnEnd(b)))
 }
 
 type moveInputs struct {
@@ -69,17 +78,18 @@ func (e *shootInputs) Controls() shooting.Controls {
 type System struct {
 	manager *entity.Manager
 	world   *world.World
-
+	radius  float64
 	// stateMu guards connections, entities, and lookup
 	stateMu  sync.RWMutex
 	entities map[entity.ID]*networkingEntity
 	lookup   map[net.Connection]entity.ID
 }
 
-func New(manager *entity.Manager, world *world.World) *System {
+func New(manager *entity.Manager, world *world.World, radius float64) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
+		radius:   radius,
 		lookup:   make(map[net.Connection]entity.ID),
 		entities: make(map[entity.ID]*networkingEntity),
 	}
@@ -107,6 +117,7 @@ func (s *System) Add(conn net.Connection) {
 				conn.Close()
 			}
 		}()
+		go sendSettings(conn, s.radius)
 		for {
 			data, err := conn.Read()
 			if err != nil { // client disconnected
@@ -118,19 +129,20 @@ func (s *System) Add(conn net.Connection) {
 				s.stateMu.Unlock()
 				return
 			}
-			message := fbs.GetRootAsMessage(data, 0)
+			message := upstream.GetRootAsMessage(data, 0)
 			packetTable := new(flatbuffers.Table)
 			if message.Packet(packetTable) {
 				switch message.PacketType() {
-				case fbs.PacketNONE:
-				case fbs.PacketPlay:
-					play := new(fbs.Play)
+				case upstream.PacketNONE:
+				case upstream.PacketSpawn:
+					play := new(upstream.Spawn)
 					play.Init(packetTable.Bytes, packetTable.Pos)
 					name := string(play.Name())
 					if name == "" {
 						name = "An Unnamed Ship"
 					}
 					ship := ship{
+						ID:       s.manager.NewEntity(),
 						Name:     name,
 						Conn:     conn,
 						Movement: new(movement.Controls),
@@ -138,7 +150,6 @@ func (s *System) Add(conn net.Connection) {
 							Cooldown: 1 * time.Second,
 						},
 					}
-					ship.ID = s.manager.NewEntity()
 					nete := &networkingEntity{
 						Connection:  conn,
 						known:       make(map[entity.ID]struct{}),
@@ -166,11 +177,11 @@ func (s *System) Add(conn net.Connection) {
 					s.entities[ship.ID] = nete
 					s.lookup[conn] = ship.ID
 					s.stateMu.Unlock()
-				case fbs.PacketControls:
+				case upstream.PacketControls:
 					s.stateMu.RLock()
 					if id, ok := s.lookup[conn]; ok {
 						if e, ok := s.entities[id]; ok {
-							controls := new(fbs.Controls)
+							controls := new(upstream.Controls)
 							controls.Init(packetTable.Bytes, packetTable.Pos)
 							e.moveInputs.moveInputs.Put(movement.Controls{controls.Left() > 0, controls.Right() > 0, controls.Thrusting() > 0})
 						}
@@ -205,28 +216,28 @@ func (s *ship) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UO
 		name = new(flatbuffers.UOffsetT)
 		*name = builder.CreateString(s.Name)
 	}
-	fbs.ShipStart(builder)
-	fbs.ShipAddId(builder, s.ID)
+	downstream.ShipStart(builder)
+	downstream.ShipAddId(builder, s.ID)
 	posn := s.Position()
-	fbs.ShipAddPosition(builder, fbs.CreatePoint(builder, int32(posn.X), int32(posn.Y)))
-	fbs.ShipAddRotation(builder, float32(s.Physics.Angle()))
-	fbs.ShipAddHealth(builder, int16(math.Max(float64(*s.Health), 0)))
+	downstream.ShipAddPosition(builder, downstream.CreatePoint(builder, int32(posn.X), int32(posn.Y)))
+	downstream.ShipAddRotation(builder, float32(s.Physics.Angle()))
+	downstream.ShipAddHealth(builder, int16(math.Max(float64(*s.Health), 0)))
 	if s.Shooting.Armed() {
-		fbs.ShipAddArmed(builder, 1)
+		downstream.ShipAddArmed(builder, 1)
 	} else {
-		fbs.ShipAddArmed(builder, 0)
+		downstream.ShipAddArmed(builder, 0)
 	}
 	if s.Movement.Thrusting {
-		fbs.ShipAddThrusting(builder, 1)
+		downstream.ShipAddThrusting(builder, 1)
 	} else {
-		fbs.ShipAddThrusting(builder, 0)
+		downstream.ShipAddThrusting(builder, 0)
 	}
 	if name != nil {
-		fbs.ShipAddName(builder, *name)
+		downstream.ShipAddName(builder, *name)
 	}
-	ship := fbs.ShipEnd(builder)
-	fbs.EntityStart(builder)
-	fbs.EntityAddSnapshotType(builder, fbs.SnapshotShip)
-	fbs.EntityAddSnapshot(builder, ship)
-	return fbs.EntityEnd(builder)
+	ship := downstream.ShipEnd(builder)
+	downstream.EntityStart(builder)
+	downstream.EntityAddSnapshotType(builder, downstream.SnapshotShip)
+	downstream.EntityAddSnapshot(builder, ship)
+	return downstream.EntityEnd(builder)
 }
