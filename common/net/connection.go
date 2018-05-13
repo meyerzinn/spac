@@ -37,6 +37,7 @@ func (c *WebsocketConnection) writer() {
 	for message := range c.out {
 		if c.conn.WriteMessage(websocket.BinaryMessage, message) != nil {
 			close(c.done)
+			return
 		}
 	}
 }

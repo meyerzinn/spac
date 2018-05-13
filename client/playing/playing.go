@@ -12,9 +12,21 @@ import (
 	"github.com/faiface/pixel/imdraw"
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/common/physics/world"
-	"math"
-	"log"
 )
+
+type Handler interface {
+	Handle(Controls)
+}
+
+type HandlerFunc func(Controls)
+
+func (fn HandlerFunc) Handle(c Controls) {
+	fn(c)
+}
+
+type Controls struct {
+	Left, Right, Thrust, Shoot bool
+}
 
 type Entity interface {
 	Update(*downstream.Entity)
@@ -35,9 +47,10 @@ type Scene struct {
 	camPos   pixel.Vec
 	camera   Camera // can be nil!
 	target   entity.ID
+	handler  Handler
 }
 
-func New(win *pixelgl.Window, worldRadius float64, me entity.ID) *Scene {
+func New(win *pixelgl.Window, worldRadius float64, me entity.ID, handler Handler) *Scene {
 	manager := new(entity.Manager)
 	world := world.New(physics.NewSpace())
 	manager.AddSystem(physics.New(manager, world, worldRadius))
@@ -50,6 +63,7 @@ func New(win *pixelgl.Window, worldRadius float64, me entity.ID) *Scene {
 		imd:      imdraw.New(nil),
 		camPos:   pixel.ZV,
 		target:   me,
+		handler:  handler,
 	}
 }
 
@@ -93,29 +107,33 @@ func (s *Scene) Perceive(perception *downstream.Perception) {
 }
 
 func (s *Scene) Update(dt float64) {
-	log.Print("update")
 	s.manager.Update(dt)
 	if s.camera == nil {
 		return
 	}
-	posn := s.camera.Position()
-	s.camPos = pixel.Lerp(s.camPos, posn, 1-math.Pow(1.0/128, dt))
-	cam := pixel.IM.Moved(s.camPos.Scaled(-1))
-	s.canvas.SetMatrix(cam)
+	//posn := s.camera.Position()
+	//s.camPos = pixel.Lerp(s.camPos, posn, 1-math.Pow(1.0/128, dt))
+	//cam := pixel.IM.Moved(s.camPos.Scaled(-1))
+	//s.canvas.SetMatrix(cam)
 	s.canvas.Clear(color.White)
 	s.imd.Clear()
 
 	for _, renderable := range s.entities {
 		renderable.Draw(s.imd)
 	}
-	s.win.SetMatrix(pixel.IM.Scaled(pixel.ZV,
-		math.Min(
-			s.win.Bounds().W()/s.canvas.Bounds().W(),
-			s.win.Bounds().H()/s.canvas.Bounds().H(),
-		),
-	).Moved(s.win.Bounds().Center()))
+	//s.win.SetMatrix(pixel.IM.Scaled(pixel.ZV,
+	//	math.Min(
+	//		s.win.Bounds().W()/s.canvas.Bounds().W(),
+	//		s.win.Bounds().H()/s.canvas.Bounds().H(),
+	//	),
+	//).Moved(s.win.Bounds().Center()))
 	s.canvas.Draw(s.win, pixel.IM.Moved(s.canvas.Bounds().Center()))
-	log.Print("rendered")
+	s.handler.Handle(Controls{
+		Left:   s.win.Pressed(pixelgl.KeyA),
+		Right:  s.win.Pressed(pixelgl.KeyD),
+		Thrust: s.win.Pressed(pixelgl.KeyW),
+		Shoot:  s.win.Pressed(pixelgl.MouseButton1) || s.win.Pressed(pixelgl.KeySpace),
+	})
 }
 
 type shipEntity struct {
@@ -138,6 +156,7 @@ func (s *shipEntity) Update(e *downstream.Entity) {
 	posn := snap.Position(nil)
 	s.physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
 	s.physics.SetAngle(float64(snap.Rotation()))
+	//log.Print(e.Id(), s.physics.Position(), s.physics.Angle())
 }
 
 func (s *shipEntity) Position() pixel.Vec {

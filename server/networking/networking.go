@@ -116,18 +116,19 @@ func (s *System) Remove(entity entity.ID) {
 }
 
 func (s *System) Add(conn net.Connection) {
-	s.stateMu.Lock()
-	defer s.stateMu.Unlock()
-
 	go func(conn net.Connection) {
 		defer func() {
 			if err := recover(); err != nil {
 				fmt.Println("encountered error decoding client message", err)
 			}
-			conn.Close()
+			err := conn.Close()
+			if err != nil {
+				fmt.Print("closing conn:", err)
+			}
 			s.stateMu.Lock()
 			if e, ok := s.lookup[conn]; ok {
 				go s.manager.Remove(e)
+				delete(s.entities, e)
 			}
 			delete(s.lookup, conn)
 			s.stateMu.Unlock()
@@ -198,6 +199,7 @@ func (s *System) Add(conn net.Connection) {
 							e.moveInputs.moveInputs.Put(movement.Controls{controls.Left() > 0, controls.Right() > 0, controls.Thrusting() > 0})
 						}
 					}
+					s.stateMu.RUnlock()
 				}
 			}
 		}
