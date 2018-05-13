@@ -1,10 +1,11 @@
 include "settings.fbs";
 include "spawn.fbs";
 include "perception.fbs";
+include "death.fbs";
 
 namespace spac.downstream;
 
-union Packet {ServerSettings, Spawn, Perception}
+union Packet {ServerSettings, Spawn, Perception, Death}
 
 table Message {
   packet:Packet;

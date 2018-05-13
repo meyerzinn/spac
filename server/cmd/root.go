@@ -46,12 +46,12 @@ var cfgFile string
 var (
 	worldRadius float64 = 10000
 	addr                = ":8080"
-	tick                = time.Millisecond * 20
 	upgrader            = &websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
 	}
+	tick time.Duration
 	//logger *zap.Logger
 )
 
@@ -66,7 +66,7 @@ var rootCmd = &cobra.Command{
 		var manager entity.Manager
 		space := physics.NewSpace()
 		world := world.New(space)
-		manager.AddSystem(health.New(space))
+		manager.AddSystem(health.New(space)) // every 50 ms
 		manager.AddSystem(movement.New(world))
 		manager.AddSystem(shooting.New(&manager, world))
 		manager.AddSystem(physics.New(&manager, world, worldRadius))
@@ -74,28 +74,30 @@ var rootCmd = &cobra.Command{
 		netwk := networking.New(&manager, world, worldRadius)
 		manager.AddSystem(netwk)
 		go func() {
-			var ticks int64
+			//var ticks int64
 			ticker := time.NewTicker(tick)
-			var skipped int64
+			defer ticker.Stop()
+			//var skipped int64
 			start := time.Now()
 			for t := range ticker.C {
-				select {
-				case <-ticker.C: // if the next tick is immediately available (means we're lagging)
-					skipped++
-					break
-				default:
-					if skipped > 0 {
-						fmt.Printf("skipping %d ticks; is the server lagging?", skipped)
-						ticks += skipped
-						skipped = 0
-					}
-					delta := t.Sub(start).Seconds()
-					start = t
-					manager.Update(delta)
-					ticks++
-				}
+				//select {
+				//case <-ticker.C: // if the next tick is immediately available (means we're lagging)
+				//	//skipped++
+				//	continue
+				//default:
+				//if skipped > 0 {
+				//	fmt.Printf("skipping %d ticks; is the server lagging?", skipped)
+				//	ticks += skipped
+				//	skipped = 0
+				//}
+				delta := t.Sub(start).Seconds()
+				start = t
+				manager.Update(delta)
+				//ticks++
+				//}
 			}
 		}()
+		// todo implement new scheduler
 		fmt.Println("game started")
 		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			conn, err := upgrader.Upgrade(w, r, nil)
@@ -122,16 +124,8 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.Flags().StringVar(&addr, "addr", ":8080", "Accept incoming requests at this address.")
-	rootCmd.Flags().DurationVarP(&tick, "tick", "t", 20*time.Millisecond, "Duration of a game tick.")
 	rootCmd.Flags().Float64Var(&worldRadius, "radius", 10000, "Radius of the game world.")
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	//rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cmd.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Millisecond*20, "Duration of a game tick")
 }
 
 // initConfig reads in config file and ENV variables if set.

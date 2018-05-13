@@ -87,5 +87,10 @@ func (b *bullet) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.
 	downstream.BulletAddPosition(builder, downstream.CreatePoint(builder, int32(position.X), int32(position.Y)))
 	velocity := b.Physics.Velocity()
 	downstream.BulletAddVelocity(builder, downstream.CreateVector(builder, float32(velocity.X), float32(velocity.Y)))
-	return downstream.BulletEnd(builder)
+	snap := downstream.BulletEnd(builder)
+	downstream.EntityStart(builder)
+	downstream.EntityAddId(builder, b.ID)
+	downstream.EntityAddSnapshot(builder, snap)
+	downstream.EntityAddSnapshotType(builder, downstream.SnapshotBullet)
+	return downstream.EntityEnd(builder)
 }

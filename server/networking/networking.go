@@ -19,6 +19,7 @@ import (
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
+	"sync/atomic"
 )
 
 type networkingEntity struct {
@@ -43,6 +44,13 @@ func sendSpawn(conn net.Connection, id entity.ID) {
 	downstream.SpawnStart(b)
 	downstream.SpawnAddId(b, id)
 	conn.Write(net.MessageDown(b, downstream.PacketSpawn, downstream.SpawnEnd(b)))
+}
+
+func sendDeath(conn net.Connection) {
+	b := builders.Get()
+	defer builders.Put(b)
+	downstream.DeathStart(b)
+	conn.Write(net.MessageDown(b, downstream.PacketDeath, downstream.DeathEnd(b)))
 }
 
 type moveInputs struct {
@@ -101,6 +109,7 @@ func (s *System) Remove(entity entity.ID) {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 	if c, ok := s.entities[entity]; ok {
+		go sendDeath(c)
 		delete(s.entities, entity)
 		delete(s.lookup, c)
 	}
@@ -114,19 +123,20 @@ func (s *System) Add(conn net.Connection) {
 		defer func() {
 			if err := recover(); err != nil {
 				fmt.Println("encountered error decoding client message", err)
-				conn.Close()
 			}
+			conn.Close()
+			s.stateMu.Lock()
+			if e, ok := s.lookup[conn]; ok {
+				go s.manager.Remove(e)
+			}
+			delete(s.lookup, conn)
+			s.stateMu.Unlock()
+			fmt.Println("client disconnected")
 		}()
 		go sendSettings(conn, s.radius)
 		for {
 			data, err := conn.Read()
 			if err != nil { // client disconnected
-				s.stateMu.Lock()
-				if e, ok := s.lookup[conn]; ok {
-					s.manager.Remove(e)
-				}
-				delete(s.lookup, conn)
-				s.stateMu.Unlock()
 				return
 			}
 			message := upstream.GetRootAsMessage(data, 0)
@@ -139,7 +149,7 @@ func (s *System) Add(conn net.Connection) {
 					play.Init(packetTable.Bytes, packetTable.Pos)
 					name := string(play.Name())
 					if name == "" {
-						name = "An Unnamed Ship"
+						name = "An Unnamed shipEntity"
 					}
 					ship := ship{
 						ID:       s.manager.NewEntity(),
@@ -149,6 +159,7 @@ func (s *System) Add(conn net.Connection) {
 						Shooting: &shooting.Component{
 							Cooldown: 1 * time.Second,
 						},
+						Health: new(health.Component),
 					}
 					nete := &networkingEntity{
 						Connection:  conn,
@@ -157,12 +168,12 @@ func (s *System) Add(conn net.Connection) {
 						shootInputs: &shootInputs{shootInputs: queue.NewRingBuffer(4)},
 						filter:      cp.NewShapeFilter(uint(ship.ID), 0, cp.ALL_CATEGORIES),
 					}
+					s.world.Do(func(space *cp.Space) {
+						ship.Physics = physics.NewShip(space, ship.ID)
+					})
 					for _, system := range s.manager.Systems() {
 						switch sys := system.(type) {
 						case *physics.System:
-							s.world.Do(func(space *cp.Space) {
-								ship.Physics = physics.NewShip(space, ship.ID)
-							})
 							sys.Add(ship.ID, ship.Physics)
 						case *perceiving.System:
 							sys.AddPerceiver(ship.ID, &ship)
@@ -177,6 +188,7 @@ func (s *System) Add(conn net.Connection) {
 					s.entities[ship.ID] = nete
 					s.lookup[conn] = ship.ID
 					s.stateMu.Unlock()
+					go sendSpawn(conn, ship.ID)
 				case upstream.PacketControls:
 					s.stateMu.RLock()
 					if id, ok := s.lookup[conn]; ok {
@@ -217,11 +229,10 @@ func (s *ship) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UO
 		*name = builder.CreateString(s.Name)
 	}
 	downstream.ShipStart(builder)
-	downstream.ShipAddId(builder, s.ID)
 	posn := s.Position()
 	downstream.ShipAddPosition(builder, downstream.CreatePoint(builder, int32(posn.X), int32(posn.Y)))
 	downstream.ShipAddRotation(builder, float32(s.Physics.Angle()))
-	downstream.ShipAddHealth(builder, int16(math.Max(float64(*s.Health), 0)))
+	downstream.ShipAddHealth(builder, int16(math.Max(float64(atomic.LoadInt32((*int32)(s.Health))), 0)))
 	if s.Shooting.Armed() {
 		downstream.ShipAddArmed(builder, 1)
 	} else {
@@ -237,6 +248,7 @@ func (s *ship) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UO
 	}
 	ship := downstream.ShipEnd(builder)
 	downstream.EntityStart(builder)
+	downstream.EntityAddId(builder, s.ID)
 	downstream.EntityAddSnapshotType(builder, downstream.SnapshotShip)
 	downstream.EntityAddSnapshot(builder, ship)
 	return downstream.EntityEnd(builder)

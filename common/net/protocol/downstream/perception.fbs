@@ -11,7 +11,6 @@ struct Vector {
 }
 
 table Ship {
-    id:uint64;
     position:Point;
     rotation:float;
     thrusting:bool;
@@ -21,7 +20,6 @@ table Ship {
 }
 
 table Bullet {
-    id:uint64;
     position:Point;
     velocity:Vector;
 }
@@ -29,6 +27,7 @@ table Bullet {
 union Snapshot { Ship, Bullet }
 
 table Entity {
+    id:uint64;
     snapshot:Snapshot;
 }
 

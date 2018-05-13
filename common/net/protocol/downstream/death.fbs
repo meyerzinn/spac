@@ -1,0 +1,5 @@
+namespace spac.downstream;
+
+table Death {
+  alive:uint64;
+}

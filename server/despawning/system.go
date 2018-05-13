@@ -28,7 +28,7 @@ func (s *System) Update(delta float64) {
 	for id, component := range s.entities {
 		component.alive++
 		if component.alive >= component.TTL {
-			s.manager.Remove(id) // will be removed next tick, thus the entity was alive for the entire TTL
+			go s.manager.Remove(id)
 		}
 	}
 }

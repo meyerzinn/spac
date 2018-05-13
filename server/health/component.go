@@ -1,3 +1,3 @@
 package health
 
-type Component int
+type Component int32

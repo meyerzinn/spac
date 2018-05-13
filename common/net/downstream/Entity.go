@@ -26,8 +26,20 @@ func (rcv *Entity) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Entity) SnapshotType() byte {
+func (rcv *Entity) Id() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Entity) MutateId(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(4, n)
+}
+
+func (rcv *Entity) SnapshotType() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
@@ -35,11 +47,11 @@ func (rcv *Entity) SnapshotType() byte {
 }
 
 func (rcv *Entity) MutateSnapshotType(n byte) bool {
-	return rcv._tab.MutateByteSlot(4, n)
+	return rcv._tab.MutateByteSlot(6, n)
 }
 
 func (rcv *Entity) Snapshot(obj *flatbuffers.Table) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		rcv._tab.Union(obj, o)
 		return true
@@ -48,13 +60,16 @@ func (rcv *Entity) Snapshot(obj *flatbuffers.Table) bool {
 }
 
 func EntityStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(3)
+}
+func EntityAddId(builder *flatbuffers.Builder, id uint64) {
+	builder.PrependUint64Slot(0, id, 0)
 }
 func EntityAddSnapshotType(builder *flatbuffers.Builder, snapshotType byte) {
-	builder.PrependByteSlot(0, snapshotType, 0)
+	builder.PrependByteSlot(1, snapshotType, 0)
 }
 func EntityAddSnapshot(builder *flatbuffers.Builder, snapshot flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(snapshot), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(snapshot), 0)
 }
 func EntityEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

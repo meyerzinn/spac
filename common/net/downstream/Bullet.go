@@ -26,20 +26,8 @@ func (rcv *Bullet) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Bullet) Id() uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.GetUint64(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *Bullet) MutateId(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(4, n)
-}
-
 func (rcv *Bullet) Position(obj *Point) *Point {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := o + rcv._tab.Pos
 		if obj == nil {
@@ -52,7 +40,7 @@ func (rcv *Bullet) Position(obj *Point) *Point {
 }
 
 func (rcv *Bullet) Velocity(obj *Vector) *Vector {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := o + rcv._tab.Pos
 		if obj == nil {
@@ -65,16 +53,13 @@ func (rcv *Bullet) Velocity(obj *Vector) *Vector {
 }
 
 func BulletStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
-}
-func BulletAddId(builder *flatbuffers.Builder, id uint64) {
-	builder.PrependUint64Slot(0, id, 0)
+	builder.StartObject(2)
 }
 func BulletAddPosition(builder *flatbuffers.Builder, position flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(1, flatbuffers.UOffsetT(position), 0)
+	builder.PrependStructSlot(0, flatbuffers.UOffsetT(position), 0)
 }
 func BulletAddVelocity(builder *flatbuffers.Builder, velocity flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(2, flatbuffers.UOffsetT(velocity), 0)
+	builder.PrependStructSlot(1, flatbuffers.UOffsetT(velocity), 0)
 }
 func BulletEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
