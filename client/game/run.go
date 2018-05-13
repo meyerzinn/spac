@@ -79,14 +79,14 @@ func Run(host string) {
 		sendSpawn(conn, name)
 	}))
 	last := time.Now()
-	ticker := time.NewTicker(5 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second / 128)
 	defer ticker.Stop()
 	for t := range ticker.C {
 		if win.Closed() {
 			log.Print("window closed; exiting")
 			return
 		}
-		delta := last.Sub(t).Seconds()
+		delta := t.Sub(last).Seconds()
 		last = t
 		scene.Update(delta)
 		win.Update()
