@@ -6,7 +6,6 @@ import (
 	"github.com/google/flatbuffers/go"
 	"fmt"
 	"github.com/20zinnm/spac/common/physics"
-	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/shooting"
@@ -20,6 +19,7 @@ import (
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
 	"sync/atomic"
+	"github.com/20zinnm/spac/common/ship"
 )
 
 type networkingEntity struct {
@@ -85,7 +85,7 @@ func (e *shootInputs) Controls() shooting.Controls {
 
 type System struct {
 	manager *entity.Manager
-	world   *world.World
+	world   *physics.World
 	radius  float64
 	// stateMu guards connections, entities, and lookup
 	stateMu  sync.RWMutex
@@ -93,7 +93,7 @@ type System struct {
 	lookup   map[net.Connection]entity.ID
 }
 
-func New(manager *entity.Manager, world *world.World, radius float64) *System {
+func New(manager *entity.Manager, world *physics.World, radius float64) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
@@ -152,7 +152,7 @@ func (s *System) Add(conn net.Connection) {
 					if name == "" {
 						name = "An Unnamed shipEntity"
 					}
-					ship := ship{
+					newShip := shipEntity{
 						ID:       s.manager.NewEntity(),
 						Name:     name,
 						Conn:     conn,
@@ -162,34 +162,37 @@ func (s *System) Add(conn net.Connection) {
 						},
 						Health: new(health.Component),
 					}
+					*newShip.Health = 100
 					nete := &networkingEntity{
 						Connection:  conn,
 						known:       make(map[entity.ID]struct{}),
 						moveInputs:  &moveInputs{moveInputs: queue.NewRingBuffer(4)},
 						shootInputs: &shootInputs{shootInputs: queue.NewRingBuffer(4)},
-						filter:      cp.NewShapeFilter(uint(ship.ID), 0, cp.ALL_CATEGORIES),
+						filter:      cp.NewShapeFilter(uint(newShip.ID), 0, cp.ALL_CATEGORIES),
 					}
-					s.world.Do(func(space *cp.Space) {
-						ship.Physics = physics.NewShip(space, ship.ID)
-					})
+					s.world.Lock()
+					newShip.Physics = ship.NewPhysics(s.world.Space, newShip.ID, cp.Vector{}) // todo spawn position should be random
+					s.world.Unlock()
 					for _, system := range s.manager.Systems() {
 						switch sys := system.(type) {
 						case *physics.System:
-							sys.Add(ship.ID, ship.Physics)
+							sys.Add(newShip.ID, newShip.Physics)
 						case *perceiving.System:
-							sys.AddPerceiver(ship.ID, &ship)
-							sys.AddPerceivable(ship.ID, &ship)
+							sys.AddPerceiver(newShip.ID, &newShip)
+							sys.AddPerceivable(newShip.ID, &newShip)
 						case *movement.System:
-							sys.Add(ship.ID, nete.moveInputs, ship.Physics, 200, 0.03)
+							sys.Add(newShip.ID, nete.moveInputs, newShip.Physics, 100, 1)
 						case *shooting.System:
-							sys.Add(ship.ID, nete.shootInputs, ship.Physics, ship.Shooting)
+							sys.Add(newShip.ID, nete.shootInputs, newShip.Physics, newShip.Shooting)
+						case *health.System:
+							sys.Add(newShip.ID, newShip.Health)
 						}
 					}
 					s.stateMu.Lock()
-					s.entities[ship.ID] = nete
-					s.lookup[conn] = ship.ID
+					s.entities[newShip.ID] = nete
+					s.lookup[conn] = newShip.ID
 					s.stateMu.Unlock()
-					go sendSpawn(conn, ship.ID)
+					go sendSpawn(conn, newShip.ID)
 				case upstream.PacketControls:
 					s.stateMu.RLock()
 					if id, ok := s.lookup[conn]; ok {
@@ -206,7 +209,7 @@ func (s *System) Add(conn net.Connection) {
 	}(conn)
 }
 
-type ship struct {
+type shipEntity struct {
 	ID       entity.ID
 	Name     string
 	Physics  physics.Component
@@ -216,15 +219,15 @@ type ship struct {
 	Movement *movement.Controls
 }
 
-func (s *ship) Perceive(perception []byte) {
+func (s *shipEntity) Perceive(perception []byte) {
 	s.Conn.Write(perception)
 }
 
-func (s *ship) Position() cp.Vector {
+func (s *shipEntity) Position() cp.Vector {
 	return s.Physics.Position()
 }
 
-func (s *ship) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
+func (s *shipEntity) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
 	var name *flatbuffers.UOffsetT
 	if !known {
 		name = new(flatbuffers.UOffsetT)
@@ -232,7 +235,7 @@ func (s *ship) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UO
 	}
 	downstream.ShipStart(builder)
 	posn := s.Position()
-	downstream.ShipAddPosition(builder, downstream.CreatePoint(builder, int32(posn.X), int32(posn.Y)))
+	downstream.ShipAddPosition(builder, downstream.CreateVector(builder, float32(posn.X), float32(posn.Y)))
 	downstream.ShipAddRotation(builder, float32(s.Physics.Angle()))
 	downstream.ShipAddHealth(builder, int16(math.Max(float64(atomic.LoadInt32((*int32)(s.Health))), 0)))
 	if s.Shooting.Armed() {

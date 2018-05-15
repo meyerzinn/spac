@@ -30,7 +30,6 @@ import (
 	"time"
 	"github.com/gorilla/websocket"
 	"net/http"
-	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/perceiving"
@@ -64,9 +63,8 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		var manager entity.Manager
-		space := physics.NewSpace()
-		world := world.New(space)
-		manager.AddSystem(health.New(space)) // every 50 ms
+		world := &physics.World{Space: physics.NewSpace()}
+		manager.AddSystem(health.New(world)) // every 50 ms
 		manager.AddSystem(movement.New(world))
 		manager.AddSystem(shooting.New(&manager, world))
 		manager.AddSystem(physics.New(&manager, world, worldRadius))

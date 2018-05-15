@@ -4,10 +4,8 @@ import (
 	"github.com/20zinnm/spac/common/physics"
 	"github.com/20zinnm/entity"
 	"sync"
-	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/server/despawning"
-	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/common/net/downstream"
 )
@@ -20,12 +18,12 @@ type shootingEntity struct {
 
 type System struct {
 	manager    *entity.Manager
-	world      *world.World
+	world      *physics.World
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]*shootingEntity
 }
 
-func New(manager *entity.Manager, world *world.World) *System {
+func New(manager *entity.Manager, world *physics.World) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
@@ -48,16 +46,12 @@ func (s *System) Update(delta float64) {
 			var bullet bullet
 			bullet.Owner = owner
 			bullet.ID = s.manager.NewEntity()
+			s.world.Lock()
+			bullet.Physics = NewBullet(s.world.Space, bullet.ID, owner, e.physics.Angle(), e.BulletVelocity)
+			s.world.Unlock()
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
 				case *physics.System:
-					s.world.Do(func(space *cp.Space) {
-						bullet.Physics.Body = space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 8, cp.Vector{})))
-						bulletShape := space.AddShape(cp.NewCircle(bullet.Physics.Body, 12, cp.Vector{}))
-						bulletShape.SetFilter(cp.NewShapeFilter(uint(owner), cp.ALL_CATEGORIES, cp.ALL_CATEGORIES))
-						bullet.Physics.SetAngle(e.physics.Angle())
-						bullet.Physics.SetVelocityVector(bullet.Physics.Rotation().Rotate(cp.Vector{0, e.BulletVelocity}))
-					})
 					sys.Add(bullet.ID, bullet.Physics)
 				case *despawning.System:
 					sys.Add(bullet.ID, 120)
@@ -84,7 +78,7 @@ type bullet struct {
 func (b *bullet) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
 	downstream.BulletStart(builder)
 	position := b.Physics.Position()
-	downstream.BulletAddPosition(builder, downstream.CreatePoint(builder, int32(position.X), int32(position.Y)))
+	downstream.BulletAddPosition(builder, downstream.CreateVector(builder, float32(position.X), float32(position.Y)))
 	velocity := b.Physics.Velocity()
 	downstream.BulletAddVelocity(builder, downstream.CreateVector(builder, float32(velocity.X), float32(velocity.Y)))
 	snap := downstream.BulletEnd(builder)

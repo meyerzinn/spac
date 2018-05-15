@@ -20,9 +20,10 @@ import (
 func Run(host string) {
 	// open window
 	cfg := pixelgl.WindowConfig{
-		Title:  "spac",
-		Bounds: pixel.R(0, 0, 1024, 768),
-		VSync:  true,
+		Title:     "spac",
+		Bounds:    pixel.R(0, 0, 1024, 768),
+		VSync:     true,
+		Resizable: true,
 	}
 	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
@@ -82,6 +83,8 @@ func Run(host string) {
 	ticker := time.NewTicker(1 * time.Second / 128)
 	defer ticker.Stop()
 	for t := range ticker.C {
+		//for {
+		//	t := time.Now()
 		if win.Closed() {
 			log.Print("window closed; exiting")
 			return

@@ -1,18 +1,13 @@
 namespace spac.downstream;
 
-struct Point {
-    x:int;
-    y:int;
-}
-
 struct Vector {
-    x:float;
-    y:float;
+    x:float32;
+    y:float32;
 }
 
 table Ship {
-    position:Point;
-    rotation:float;
+    position:Vector;
+    rotation:float32;
     thrusting:bool;
     armed:bool;
     health:int16;
@@ -20,7 +15,7 @@ table Ship {
 }
 
 table Bullet {
-    position:Point;
+    position:Vector;
     velocity:Vector;
 }
 

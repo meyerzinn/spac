@@ -3,42 +3,51 @@ package physics
 import (
 	"github.com/20zinnm/entity"
 	"sync"
-	"github.com/20zinnm/spac/common/physics/world"
 	"github.com/jakecoffman/cp"
 )
 
+type Handler interface {
+	Remove(entity.ID)
+}
+
+type HandlerFunc func(entity.ID)
+
+func (fn HandlerFunc) Remove(entity entity.ID) {
+	fn(entity)
+}
+
 type System struct {
-	world      *world.World
+	world      *World
 	radius     float64
-	manager    *entity.Manager
+	handler    Handler
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]Component
 }
 
-func New(manager *entity.Manager, world *world.World, radius float64) *System {
+func New(handler Handler, world *World, radius float64) *System {
 	return &System{
 		world:    world,
 		radius:   radius,
 		entities: make(map[entity.ID]Component),
-		manager:  manager,
+		handler:  handler,
 	}
 }
 
 func (s *System) Update(delta float64) {
-	s.world.Do(func(space *cp.Space) {
-		space.Step(delta)
-		s.entitiesMu.RLock()
-		for id, component := range s.entities {
-			if !component.Position().Near(cp.Vector{}, s.radius) {
-				s.manager.Remove(id)
-			}
+	s.world.Lock()
+	defer s.world.Unlock()
+
+	s.world.Space.Step(delta)
+	s.entitiesMu.RLock()
+	for id, component := range s.entities {
+		if !component.Position().Near(cp.Vector{}, s.radius) {
+			s.handler.Remove(id)
 		}
-		s.entitiesMu.RUnlock()
-	})
+	}
+	s.entitiesMu.RUnlock()
 }
 
 func (s *System) Add(entity entity.ID, component Component) {
-	component.UserData = entity
 	s.entitiesMu.Lock()
 	s.entities[entity] = component
 	s.entitiesMu.Unlock()
@@ -47,9 +56,9 @@ func (s *System) Add(entity entity.ID, component Component) {
 func (s *System) Remove(entity entity.ID) {
 	s.entitiesMu.Lock()
 	if c, ok := s.entities[entity]; ok {
-		s.world.Do(func(space *cp.Space) {
-			space.RemoveBody(c.Body)
-		})
+		s.world.Lock()
+		s.world.Space.RemoveBody(c.Body)
+		s.world.Unlock()
 		delete(s.entities, entity)
 	}
 	s.entitiesMu.Unlock()
