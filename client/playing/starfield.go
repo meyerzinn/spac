@@ -4,15 +4,16 @@ import (
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel"
 	"math"
+	"image/color"
 )
 
 const (
-	StarSeed     = 0x9d2c5680
-	StarTileSize = 256
+	StarSeed     = 0x9d2c5681
+	StarTileSize = 512
 )
 
-func drawStars(imd *imdraw.IMDraw, off pixel.Vec, bounds pixel.Rect, starscale int) {
-	//imd.Precision = 30
+func drawStars(imd *imdraw.IMDraw, off pixel.Vec, bounds pixel.Rect, starscale int, color color.Color) {
+	imd.Color = color
 	size := int(StarTileSize / starscale)
 	offx := int(math.Floor(off.X))
 	offy := int(math.Floor(off.Y))
@@ -28,8 +29,8 @@ func drawStars(imd *imdraw.IMDraw, off pixel.Vec, bounds pixel.Rect, starscale i
 				hash >>= 3
 				py := (hash % int(size)) + (j - offy)
 				hash >>= 3
-				imd.Push(pixel.V(float64(px), float64(py)), )
-				imd.Circle(1, 1)
+				imd.Push(pixel.V(math.Round(float64(px)+.5), math.Round(float64(py)+.5)), )
+				imd.Circle(1, 0)
 			}
 		}
 	}

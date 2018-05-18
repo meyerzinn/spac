@@ -127,9 +127,9 @@ func (s *Scene) Update(dt float64) {
 	}
 	s.world.Lock()
 	defer s.world.Unlock()
-	//if s.win.Bounds() != s.canvas.Bounds() {
-	//	// window has resized
-	//}
+	if s.win.Bounds() != s.canvas.Bounds() {
+		//s.canvas.SetBounds(s.win.Bounds())
+	}
 	s.camPos = pixel.Lerp(s.camPos, s.target.Position(), 1-math.Pow(1.0/128, dt))
 	//log.Print("camPos ", s.camPos)
 	//log.Print("camPos ", s.camPos, " camera position ", s.camera.Position(), " step ", 1-math.Pow(1.0/128, dt), " dt ", dt)
@@ -144,7 +144,9 @@ func (s *Scene) Update(dt float64) {
 	//}
 	s.canvas.SetMatrix(cam)
 	s.imd.Color = colornames.Gray
-	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 1)
+	drawStars(s.imd, s.camPos.Scaled(2), s.canvas.Bounds(), 1, colornames.White)
+	drawStars(s.imd, s.camPos.Scaled(1/4), s.canvas.Bounds(), 2, colornames.Gray)
+	drawStars(s.imd, s.camPos.Scaled(1/4), s.canvas.Bounds(), 3, colornames.Darkgray)
 	//s.imd.Color = colornames.White
 	//drawStars(s.imd, s.camPos, s.canvas.Bounds(), 8)
 	//s.imd.Color = colornames.Gray
