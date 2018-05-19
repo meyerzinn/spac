@@ -147,8 +147,10 @@ func (s *Scene) Update(dt float64) {
 	s.canvas.SetMatrix(cam)
 
 	// draw stars
-	s.imd.Color = colornames.White
+	s.imd.Color = colornames.Darkgray
 	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 4)
+	s.imd.Color = colornames.Lightgray
+	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 1)
 
 	// draw entities
 	for _, renderable := range s.entities {
