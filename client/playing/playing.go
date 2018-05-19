@@ -43,7 +43,6 @@ type Camera interface {
 
 type Scene struct {
 	win            *pixelgl.Window
-	manager        *entity.Manager
 	entities       map[entity.ID]Entity
 	world          *physics.World
 	canvas         *pixelgl.Canvas
@@ -56,15 +55,12 @@ type Scene struct {
 }
 
 func New(win *pixelgl.Window, worldRadius float64, targetId entity.ID, handler Handler) *Scene {
-	manager := new(entity.Manager)
 	world := &physics.World{
 		Space: physics.NewSpace(),
 	}
-	manager.AddSystem(physics.New(manager, world, worldRadius))
 
 	return &Scene{
 		win:      win,
-		manager:  manager,
 		world:    world,
 		entities: make(map[entity.ID]Entity),
 		//canvas:   pixelgl.NewCanvas(pixel.R(-1024/2, -768/2, 1024/2, 768/2)),
@@ -99,12 +95,7 @@ func (s *Scene) Perceive(perception *downstream.Perception) {
 			newShip.physics = ship.NewPhysics(s.world.Space, e.Id(), cp.Vector{})
 			newShip.Update(e)
 			s.entities[e.Id()] = newShip
-			for _, system := range s.manager.Systems() {
-				switch sys := system.(type) {
-				case *physics.System:
-					sys.Add(e.Id(), newShip.physics)
-				}
-			}
+
 			if s.target == nil && e.Id() == s.targetId {
 				log.Print("tracking ", e.Id())
 				s.target = newShip
@@ -113,51 +104,53 @@ func (s *Scene) Perceive(perception *downstream.Perception) {
 	}
 	for id := range s.entities {
 		if _, ok := known[id]; !ok {
-			go s.manager.Remove(id)
 			delete(s.entities, id)
 		}
 	}
 }
 
 func (s *Scene) Update(dt float64) {
-	physicsDelta := time.Now().Sub(time.Unix(0, atomic.LoadInt64(&s.lastPerception))).Seconds()
-	s.manager.Update(physicsDelta)
 	if s.target == nil {
 		return
 	}
 	s.world.Lock()
 	defer s.world.Unlock()
+	controls := Controls{
+		Left:   s.win.Pressed(pixelgl.KeyA),
+		Right:  s.win.Pressed(pixelgl.KeyD),
+		Thrust: s.win.Pressed(pixelgl.KeyW),
+		Shoot:  s.win.Pressed(pixelgl.MouseButton1) || s.win.Pressed(pixelgl.KeySpace),
+	}
+	// todo implement client-side prediction (this code makes it move too fast--need to investigate)
+	//if controls.Left != controls.Right {
+	//	if controls.Left {
+	//		s.target.physics.SetAngularVelocity(1)
+	//	} else {
+	//		s.target.physics.SetAngularVelocity(-1)
+	//	}
+	//} else {
+	//	s.target.physics.SetAngularVelocity(0)
+	//}
+	//if controls.Thrust {
+	//	s.target.physics.SetForce(s.target.physics.Rotation().Rotate(cp.Vector{Y: 100}))
+	//}
+	physicsDelta := time.Now().Sub(time.Unix(0, atomic.LoadInt64(&s.lastPerception))).Seconds()
+	s.world.Space.Step(physicsDelta)
+	s.handler.Handle(controls)
 	if s.win.Bounds() != s.canvas.Bounds() {
-		//s.canvas.SetBounds(s.win.Bounds())
+		//todo resize canvas if the window size changes
 	}
 	s.camPos = pixel.Lerp(s.camPos, s.target.Position(), 1-math.Pow(1.0/128, dt))
-	//log.Print("camPos ", s.camPos)
-	//log.Print("camPos ", s.camPos, " camera position ", s.camera.Position(), " step ", 1-math.Pow(1.0/128, dt), " dt ", dt)
 	cam := pixel.IM.Moved(s.camPos.Scaled(-1))
 	s.canvas.Clear(colornames.Black)
 	s.imd.Clear()
-	//s.canvas.SetMatrix(pixel.IM.Moved(s.camPos))
-	//s.imd.Color = colornames.Black
-	//for x := float64(0); x < s.canvas.Bounds().W(); x += 50 {
-	//	s.imd.Push(pixel.Vec{x, 0}, pixel.Vec{x, s.canvas.Bounds().H()})
-	//	s.imd.Line(1)
-	//}
 	s.canvas.SetMatrix(cam)
-	s.imd.Color = colornames.Gray
-	drawStars(s.imd, s.camPos.Scaled(2), s.canvas.Bounds(), 1, colornames.White)
-	drawStars(s.imd, s.camPos.Scaled(1/4), s.canvas.Bounds(), 2, colornames.Gray)
-	drawStars(s.imd, s.camPos.Scaled(1/4), s.canvas.Bounds(), 3, colornames.Darkgray)
-	//s.imd.Color = colornames.White
-	//drawStars(s.imd, s.camPos, s.canvas.Bounds(), 8)
-	//s.imd.Color = colornames.Gray
-	//drawStars(s.imd, s.camPos, s.canvas.Bounds(), 6)
-	//drawStars(s.imd, s.camPos, s.canvas.Bounds(), 3)
-	// draw grid
-	//s.imd.Color = colornames.Black
-	//for x := s.camPos.X - .5*s.canvas.Bounds().W() + float64(int(s.camPos.X)%64); x < s.camPos.X+.5*s.canvas.Bounds().W(); x += 64 {
-	//	s.imd.Push(pixel.Vec{x, 0}, pixel.Vec{x, s.canvas.Bounds().H()})
-	//	s.imd.Line(1)
-	//}
+
+	// draw stars
+	s.imd.Color = colornames.White
+	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 4)
+
+	// draw entities
 	for _, renderable := range s.entities {
 		renderable.Draw(s.imd)
 	}
@@ -171,15 +164,6 @@ func (s *Scene) Update(dt float64) {
 		),
 	).Moved(s.win.Bounds().Center()))
 	s.canvas.Draw(s.win, pixel.IM.Moved(s.canvas.Bounds().Center()))
-
-	controls := Controls{
-		Left:   s.win.Pressed(pixelgl.KeyA),
-		Right:  s.win.Pressed(pixelgl.KeyD),
-		Thrust: s.win.Pressed(pixelgl.KeyW),
-		Shoot:  s.win.Pressed(pixelgl.MouseButton1) || s.win.Pressed(pixelgl.KeySpace),
-	}
-	s.handler.Handle(controls)
-
 }
 
 type shipEntity struct {
