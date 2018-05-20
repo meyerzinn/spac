@@ -5,7 +5,8 @@ import (
 	"sync"
 	"github.com/google/flatbuffers/go"
 	"fmt"
-	"github.com/20zinnm/spac/common/physics"
+	"github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/server/physics"
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/shooting"
@@ -55,14 +56,14 @@ func sendDeath(conn net.Connection) {
 
 type moveInputs struct {
 	moveInputs *queue.RingBuffer
-	lastMove   movement.Controls
+	lastMove   *movement.Controls
 }
 
 func (m *moveInputs) Controls() movement.Controls {
-	ctrls := m.lastMove
+	ctrls := *m.lastMove
 	if m.moveInputs.Len() > 0 {
 		if i, err := m.moveInputs.Get(); err == nil {
-			m.lastMove = i.(movement.Controls)
+			*m.lastMove = i.(movement.Controls)
 		}
 	}
 	return ctrls
@@ -85,7 +86,7 @@ func (e *shootInputs) Controls() shooting.Controls {
 
 type System struct {
 	manager *entity.Manager
-	world   *physics.World
+	world   *world.World
 	radius  float64
 	// stateMu guards connections, entities, and lookup
 	stateMu  sync.RWMutex
@@ -93,7 +94,7 @@ type System struct {
 	lookup   map[net.Connection]entity.ID
 }
 
-func New(manager *entity.Manager, world *physics.World, radius float64) *System {
+func New(manager *entity.Manager, world *world.World, radius float64) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
@@ -166,7 +167,7 @@ func (s *System) Add(conn net.Connection) {
 					nete := &networkingEntity{
 						Connection:  conn,
 						known:       make(map[entity.ID]struct{}),
-						moveInputs:  &moveInputs{moveInputs: queue.NewRingBuffer(4)},
+						moveInputs:  &moveInputs{moveInputs: queue.NewRingBuffer(4), lastMove: newShip.Movement},
 						shootInputs: &shootInputs{shootInputs: queue.NewRingBuffer(4)},
 						filter:      cp.NewShapeFilter(uint(newShip.ID), 0, cp.ALL_CATEGORIES),
 					}
@@ -181,7 +182,7 @@ func (s *System) Add(conn net.Connection) {
 							sys.AddPerceiver(newShip.ID, &newShip)
 							sys.AddPerceivable(newShip.ID, &newShip)
 						case *movement.System:
-							sys.Add(newShip.ID, nete.moveInputs, newShip.Physics, 100, 1)
+							sys.Add(newShip.ID, nete.moveInputs, newShip.Physics, movement.ShipVelocity, 1)
 						case *shooting.System:
 							sys.Add(newShip.ID, nete.shootInputs, newShip.Physics, newShip.Shooting)
 						case *health.System:
@@ -234,9 +235,9 @@ func (s *shipEntity) Snapshot(builder *flatbuffers.Builder, known bool) flatbuff
 		*name = builder.CreateString(s.Name)
 	}
 	downstream.ShipStart(builder)
-	posn := s.Position()
-	downstream.ShipAddPosition(builder, downstream.CreateVector(builder, float32(posn.X), float32(posn.Y)))
-	downstream.ShipAddRotation(builder, float32(s.Physics.Angle()))
+	downstream.ShipAddPosition(builder, downstream.CreateVector(builder, float32(s.Position().X), float32(s.Position().Y)))
+	downstream.ShipAddVelocity(builder, downstream.CreateVector(builder, float32(s.Physics.Velocity().X), float32(s.Physics.Velocity().Y)))
+	downstream.ShipAddAngle(builder, float32(s.Physics.Angle()))
 	downstream.ShipAddHealth(builder, int16(math.Max(float64(atomic.LoadInt32((*int32)(s.Health))), 0)))
 	if s.Shooting.Armed() {
 		downstream.ShipAddArmed(builder, 1)

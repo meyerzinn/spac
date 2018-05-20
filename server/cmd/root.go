@@ -23,7 +23,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,10 +34,11 @@ import (
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/server/networking"
 	"github.com/20zinnm/spac/server/health"
-	"github.com/20zinnm/spac/common/physics"
 	"github.com/20zinnm/spac/server/shooting"
 	"log"
 	"github.com/20zinnm/spac/common/net"
+	commonPhysics "github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/server/physics"
 )
 
 var cfgFile string
@@ -54,16 +54,13 @@ var (
 	//logger *zap.Logger
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Run a spac server",
 	Long:  ``,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		var manager entity.Manager
-		world := &physics.World{Space: physics.NewSpace()}
+		world := &commonPhysics.World{Space: commonPhysics.NewSpace()}
 		manager.AddSystem(health.New(world)) // every 50 ms
 		manager.AddSystem(movement.New(world))
 		manager.AddSystem(shooting.New(&manager, world))
@@ -72,30 +69,15 @@ var rootCmd = &cobra.Command{
 		netwk := networking.New(&manager, world, worldRadius)
 		manager.AddSystem(netwk)
 		go func() {
-			//var ticks int64
 			ticker := time.NewTicker(tick)
 			defer ticker.Stop()
-			//var skipped int64
 			start := time.Now()
 			for t := range ticker.C {
-				//select {
-				//case <-ticker.C: // if the next tick is immediately available (means we're lagging)
-				//	//skipped++
-				//	continue
-				//default:
-				//if skipped > 0 {
-				//	fmt.Printf("skipping %d ticks; is the server lagging?", skipped)
-				//	ticks += skipped
-				//	skipped = 0
-				//}
 				delta := t.Sub(start).Seconds()
 				start = t
 				manager.Update(delta)
-				//ticks++
-				//}
 			}
 		}()
-		// todo implement new scheduler
 		fmt.Println("game started")
 		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			conn, err := upgrader.Upgrade(w, r, nil)
@@ -110,8 +92,6 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -126,27 +106,19 @@ func init() {
 	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Millisecond*20, "Duration of a game tick")
 }
 
-// initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	if cfgFile != "" {
-		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-
-		// Search config in home directory with name ".cmd" (without extension).
 		viper.AddConfigPath(home)
 		viper.SetConfigName(".cmd")
 	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
+	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}

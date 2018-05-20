@@ -1,23 +1,24 @@
 package game
 
 import (
-	"github.com/google/flatbuffers/go"
-	"log"
-	"github.com/20zinnm/spac/common/net/downstream"
-	"time"
-	"golang.org/x/image/colornames"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/faiface/pixel"
-	"net/url"
-	"github.com/gorilla/websocket"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/upstream"
 	"github.com/20zinnm/spac/common/net/builders"
-	"github.com/20zinnm/spac/client/menu"
-	"github.com/20zinnm/spac/client/playing"
+	"os/signal"
+	"os"
+	"context"
+	"time"
+	"fmt"
 )
 
+var CtxWindowKey = "window"
+
 func Run(host string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// open window
 	cfg := pixelgl.WindowConfig{
 		Title:     "spac",
@@ -29,97 +30,28 @@ func Run(host string) {
 	if err != nil {
 		panic(err)
 	}
-	// green = loading
-	// todo: make actual loading screen
-	win.Clear(colornames.Green)
-	// connect to server
-	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
-	log.Printf("connecting to %s", u.String())
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	log.Print("connected")
-	conn := net.Websocket(c)
-	in := make(chan *downstream.Message, 100)
-	disconnected := make(chan struct{})
-	go func() {
-		defer close(disconnected)
-		for {
-			data, err := conn.Read()
-			if err != nil {
-				return
-			}
-			in <- downstream.GetRootAsMessage(data, 0)
-		}
-	}()
-	msg := <-in
-	if msg.PacketType() != downstream.PacketServerSettings {
-		log.Fatal("first packet received from server is not settings")
-	}
-	packetTable := new(flatbuffers.Table)
-	if !msg.Packet(packetTable) {
-		log.Fatal("decode packet")
-	}
-	settings := new(downstream.ServerSettings)
-	settings.Init(packetTable.Bytes, packetTable.Pos)
-	radius := settings.WorldRadius()
-	log.Print("world radius: ", radius)
 
-	controlsQueue := make(chan playing.Controls, 64)
-	var controls playing.Controls
+	ctx = context.WithValue(ctx, CtxWindowKey, win)
+	CurrentScene = NewConnecting(ctx, host)
 
-	go func() {
-		for c := range controlsQueue {
-			sendControls(conn, c)
-		}
-	}()
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
 
-	var scene Scene = menu.New(win, menu.HandlerFunc(func(name string) {
-		log.Print("spawning...")
-		sendSpawn(conn, name)
-	}))
-	last := time.Now()
-	ticker := time.NewTicker(1 * time.Second / 128)
+	ticker := time.NewTicker(time.Second / 60) // max 60 fps for now
 	defer ticker.Stop()
+	last := time.Now()
 	for t := range ticker.C {
-		//for {
-		//	t := time.Now()
-		if win.Closed() {
-			log.Print("window closed; exiting")
-			return
-		}
-		delta := t.Sub(last).Seconds()
-		last = t
-		scene.Update(delta)
-		win.Update()
 		select {
-		case <-disconnected:
-			log.Fatal("disconnected from server")
-		case message := <-in:
-			packetTable := new(flatbuffers.Table)
-			if !message.Packet(packetTable) {
-				log.Fatal("parse message")
-			}
-			switch message.PacketType() {
-			case downstream.PacketSpawn:
-				log.Print("spawned")
-				spawn := new(downstream.Spawn)
-				spawn.Init(packetTable.Bytes, packetTable.Pos)
-				scene = playing.New(win, radius, spawn.Id(), playing.HandlerFunc(func(c playing.Controls) {
-					if c != controls {
-						controls = c
-						controlsQueue <- c
-					}
-				}))
-			case downstream.PacketPerception:
-				perception := new(downstream.Perception)
-				perception.Init(packetTable.Bytes, packetTable.Pos)
-				scene.(*playing.Scene).Perceive(perception)
-			case downstream.PacketDeath:
-			}
+		case <-interrupt:
+			return
 		default:
-			break
+			if win.Closed() {
+				fmt.Println("window closed; exiting")
+				os.Exit(0)
+			}
+			CurrentScene.Update(t.Sub(last).Seconds())
+			last = t
+			win.Update()
 		}
 	}
 }
@@ -129,17 +61,6 @@ func boolToByte(val bool) byte {
 		return 1
 	}
 	return 0
-}
-
-func sendControls(conn net.Connection, controls playing.Controls) {
-	b := builders.Get()
-	defer builders.Put(b)
-	upstream.ControlsStart(b)
-	upstream.ControlsAddLeft(b, boolToByte(controls.Left))
-	upstream.ControlsAddRight(b, boolToByte(controls.Right))
-	upstream.ControlsAddThrusting(b, boolToByte(controls.Thrust))
-	upstream.ControlsAddShooting(b, boolToByte(controls.Shoot))
-	conn.Write(net.MessageUp(b, upstream.PacketControls, upstream.ControlsEnd(b)))
 }
 
 func sendSpawn(conn net.Connection, name string) {

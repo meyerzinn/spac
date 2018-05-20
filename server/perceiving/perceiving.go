@@ -8,7 +8,7 @@ import (
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/downstream"
-	"github.com/20zinnm/spac/common/physics"
+	"github.com/20zinnm/spac/common/world"
 )
 
 const CollisionType cp.CollisionType = 1 << 2
@@ -28,14 +28,14 @@ type perceivingEntity struct {
 }
 
 type System struct {
-	world          *physics.World
+	world          *world.World
 	perceiversMu   sync.RWMutex
 	perceivers     map[entity.ID]perceivingEntity
 	perceivablesMu sync.RWMutex
 	perceivables   map[entity.ID]Perceivable
 }
 
-func New(world *physics.World) *System {
+func New(world *world.World) *System {
 	return &System{
 		world:        world,
 		perceivers:   make(map[entity.ID]perceivingEntity),

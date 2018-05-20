@@ -4,7 +4,7 @@ import (
 	"sync"
 	"github.com/20zinnm/entity"
 	"github.com/jakecoffman/cp"
-	"github.com/20zinnm/spac/common/physics"
+	"github.com/20zinnm/spac/common/world"
 )
 
 const (
@@ -17,7 +17,7 @@ type System struct {
 	entities   map[entity.ID]*Component
 }
 
-func New(world *physics.World) *System {
+func New(world *world.World) *System {
 	world.Lock()
 	defer world.Unlock()
 	var system System

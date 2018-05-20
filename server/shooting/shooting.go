@@ -1,13 +1,14 @@
 package shooting
 
 import (
-	"github.com/20zinnm/spac/common/physics"
+	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/entity"
 	"sync"
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/server/despawning"
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/server/physics"
 )
 
 type shootingEntity struct {
@@ -18,12 +19,12 @@ type shootingEntity struct {
 
 type System struct {
 	manager    *entity.Manager
-	world      *physics.World
+	world      *world.World
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]*shootingEntity
 }
 
-func New(manager *entity.Manager, world *physics.World) *System {
+func New(manager *entity.Manager, world *world.World) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
