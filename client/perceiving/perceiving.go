@@ -27,14 +27,16 @@ func (fn UpdaterFunc) Update(e *downstream.Entity) {
 type System struct {
 	manager    *entity.Manager
 	world      *world.World
+	self       entity.ID
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]Updater
 }
 
-func New(manager *entity.Manager, world *world.World) *System {
+func New(manager *entity.Manager, world *world.World, self entity.ID) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
+		self:     self,
 		entities: make(map[entity.ID]Updater),
 	}
 }
@@ -45,8 +47,8 @@ func (s *System) Update(delta float64) {
 func (s *System) Perceive(perception *downstream.Perception) {
 	s.entitiesMu.Lock()
 	s.world.Lock()
-	defer s.entitiesMu.Unlock()
 	defer s.world.Unlock()
+	defer s.entitiesMu.Unlock()
 
 	known := make(map[entity.ID]struct{}, perception.EntitiesLength())
 	for i := 0; i < perception.EntitiesLength(); i++ {
@@ -63,7 +65,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 		switch e.SnapshotType() {
 		case downstream.SnapshotShip:
 			id := e.Id()
-			shipPhysics := world.NewShip(s.world.Space, id)
+			shipPhysics := physics.NewShip(s.world.Space, id)
 			shipMu := new(sync.Mutex)
 			var armed, thrusting bool
 			for _, system := range s.manager.Systems() {
@@ -113,6 +115,11 @@ func (s *System) Perceive(perception *downstream.Perception) {
 							imd.Circle(8, 0)
 						}
 					}))
+					if id == s.self {
+						sys.Track(rendering.TrackableFunc(func() pixel.Vec {
+							return pixel.Vec(shipPhysics.Position())
+						}))
+					}
 				}
 			}
 			updater := UpdaterFunc(func(entity *downstream.Entity) {
@@ -141,7 +148,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 	}
 	for id := range s.entities {
 		if _, ok := known[id]; !ok {
-			delete(s.entities, id)
+			go s.manager.Remove(id)
 		}
 	}
 }

@@ -14,19 +14,25 @@ import (
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/google/flatbuffers/go"
 	"log"
+	"os"
+	"fmt"
 )
 
 type PlayingScene struct {
 	ctx        context.Context
 	manager    *entity.Manager
 	perceiving *perceiving.System
-	next       chan struct{}
+	next       chan Scene
+	done       chan struct{}
 }
 
 func (s *PlayingScene) Update(dt float64) {
 	select {
-	case <-s.next:
-		CurrentScene = NewMenuScene(s.ctx)
+	case next := <-s.next:
+		fmt.Println("next scene")
+		CurrentScene = next
+	default:
+		s.manager.Update(dt)
 	}
 }
 
@@ -35,7 +41,7 @@ func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 	last := rendering.Inputs{}
 	for {
 		select {
-		case <-s.next:
+		case <-s.done:
 			return
 		case <-s.ctx.Done():
 			return
@@ -50,16 +56,17 @@ func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 
 func (s *PlayingScene) reader() {
 	conn := s.ctx.Value(CtxConnectionKey).(net.Connection)
+	defer close(s.done)
 	for {
 		select {
-		case <-s.next:
-			return
 		case <-s.ctx.Done():
 			return
 		default:
 			data, err := conn.Read()
 			if err != nil {
-				close(s.next)
+				log.Println("disconnected")
+				os.Exit(0)
+				// todo just go back to connecting and try again instead of exiting
 				return
 			}
 			message := downstream.GetRootAsMessage(data, 0)
@@ -71,7 +78,10 @@ func (s *PlayingScene) reader() {
 			case downstream.PacketPerception:
 				perception := new(downstream.Perception)
 				perception.Init(packetTable.Bytes, packetTable.Pos)
-
+				s.perceiving.Perceive(perception)
+			case downstream.PacketDeath:
+				s.next <- NewMenuScene(s.ctx)
+				return
 			}
 		}
 	}
@@ -79,22 +89,23 @@ func (s *PlayingScene) reader() {
 
 func NewPlayingScene(ctx context.Context) *PlayingScene {
 	manager := new(entity.Manager)
-	next := make(chan struct{})
 	scene := &PlayingScene{
 		ctx:     ctx,
 		manager: manager,
-		next:    next,
+		next:    make(chan Scene),
+		done:    make(chan struct{}),
 	}
-
 	w := &world.World{Space: world.NewSpace()}
-	manager.AddSystem(perceiving.New(manager, w))
+	scene.perceiving = perceiving.New(manager, w, ctx.Value(CtxTargetIDKey).(entity.ID))
+	manager.AddSystem(scene.perceiving)
 	manager.AddSystem(physics.New(w))
 	inputsQueue := make(chan rendering.Inputs, 16)
 	manager.AddSystem(rendering.New(ctx.Value(CtxWindowKey).(*pixelgl.Window), w, rendering.InputHandlerFunc(func(i rendering.Inputs) {
 		inputsQueue <- i
 	})))
 	go scene.writer(inputsQueue)
-
+	go scene.reader()
+	return scene
 }
 
 func sendControls(conn net.Connection, inputs rendering.Inputs) {

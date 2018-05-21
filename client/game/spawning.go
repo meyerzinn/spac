@@ -6,6 +6,7 @@ import (
 	"log"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/google/flatbuffers/go"
+	"fmt"
 )
 
 var CtxTargetIDKey = "target"
@@ -13,11 +14,11 @@ var CtxTargetIDKey = "target"
 type SpawningScene struct {
 	ctx  context.Context
 	conn net.Connection
-	next chan struct{}
+	next chan Scene
 }
 
 func NewSpawningScene(ctx context.Context) *SpawningScene {
-	scene := &SpawningScene{ctx: ctx, next: make(chan struct{})}
+	scene := &SpawningScene{ctx: ctx, next: make(chan Scene)}
 	go func() {
 		conn := ctx.Value(CtxConnectionKey).(net.Connection)
 		for {
@@ -36,16 +37,18 @@ func NewSpawningScene(ctx context.Context) *SpawningScene {
 			}
 			spawn := new(downstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)
-			scene.ctx = context.WithValue(scene.ctx, CtxTargetIDKey, spawn.Id())
-			close(scene.next)
+			scene.next <- NewPlayingScene(context.WithValue(scene.ctx, CtxTargetIDKey, spawn.Id()))
+			return
 		}
 	}()
-
+	return scene
 }
 
 func (s *SpawningScene) Update(_ float64) {
 	select {
-	case <-s.next:
-		CurrentScene = NewPlayingScene(s.ctx)
+	case scene := <-s.next:
+		fmt.Println("next scene")
+		CurrentScene = scene
+	default:
 	}
 }

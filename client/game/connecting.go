@@ -22,7 +22,9 @@ type ConnectingScene struct {
 func (s *ConnectingScene) Update(dt float64) {
 	select {
 	case scene := <-s.next:
+		fmt.Println("next scene")
 		CurrentScene = scene
+	default:
 	}
 }
 
@@ -35,33 +37,36 @@ func NewConnecting(ctx context.Context, host string) *ConnectingScene {
 	}
 	log.Print("connected")
 	conn := net.Websocket(c)
-	ready := make(chan struct{})
-	scene := &ConnectingScene{ctx: context.WithValue(ctx, CtxConnectionKey, conn)}
+	scene := &ConnectingScene{
+		ctx:  context.WithValue(ctx, CtxConnectionKey, conn),
+		next: make(chan Scene),
+	}
 	go func() {
 		for {
 			select {
 			case <-scene.ctx.Done():
 				return
-			}
-			data, err := conn.Read()
-			if err != nil {
-				fmt.Println("disconnected", err)
-				ctx.Done()
+			default:
+				data, err := conn.Read()
+				if err != nil {
+					fmt.Println("disconnected", err)
+					ctx.Done()
+					return
+				}
+				message := downstream.GetRootAsMessage(data, 0)
+				if message.PacketType() != downstream.PacketServerSettings {
+					log.Println("received packet other than settings at connecting scene; discarding")
+					continue
+				}
+				packetTable := new(flatbuffers.Table)
+				if !message.Packet(packetTable) {
+					log.Fatalln("failed to decode settings packet")
+				}
+				settings := new(downstream.ServerSettings)
+				settings.Init(packetTable.Bytes, packetTable.Pos)
+				scene.next <- NewMenuScene(context.WithValue(scene.ctx, CtxWorldRadiusKey, settings.WorldRadius()))
 				return
 			}
-			message := downstream.GetRootAsMessage(data, 0)
-			if message.PacketType() != downstream.PacketServerSettings {
-				log.Println("received packet other than settings at connecting scene; discarding")
-				continue
-			}
-			packetTable := new(flatbuffers.Table)
-			if !message.Packet(packetTable) {
-				log.Fatalln("failed to decode settings packet")
-			}
-			settings := new(downstream.ServerSettings)
-			settings.Init(packetTable.Bytes, packetTable.Pos)
-			scene.ctx = context.WithValue(scene.ctx, CtxWorldRadiusKey, settings.WorldRadius())
-			close(ready)
 		}
 	}()
 	return scene

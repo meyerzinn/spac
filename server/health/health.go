@@ -5,10 +5,7 @@ import (
 	"github.com/20zinnm/entity"
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/common/world"
-)
-
-const (
-	CollisionType cp.CollisionType = 1 << 1
+	"github.com/20zinnm/spac/server/physics/collision"
 )
 
 type System struct {
@@ -17,12 +14,12 @@ type System struct {
 	entities   map[entity.ID]*Component
 }
 
-func New(world *world.World) *System {
-	world.Lock()
-	defer world.Unlock()
+func New(w *world.World) *System {
+	w.Lock()
+	defer w.Unlock()
 	var system System
 	system.entities = make(map[entity.ID]*Component)
-	handler := world.Space.NewCollisionHandler(CollisionType, CollisionType)
+	handler := w.Space.NewCollisionHandler(collision.Health, collision.Health)
 	handler.PreSolveFunc = func(arb *cp.Arbiter, space *cp.Space, userData interface{}) bool {
 		system.entitiesMu.RLock()
 		defer system.entitiesMu.RUnlock()

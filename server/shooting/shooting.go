@@ -12,7 +12,7 @@ import (
 )
 
 type shootingEntity struct {
-	physics    physics.Component
+	physics    world.Component
 	controller Controller
 	*Component
 }
@@ -32,7 +32,7 @@ func New(manager *entity.Manager, world *world.World) *System {
 	}
 }
 
-func (s *System) Add(id entity.ID, controller Controller, body physics.Component, component *Component) {
+func (s *System) Add(id entity.ID, controller Controller, body world.Component, component *Component) {
 	s.entitiesMu.Lock()
 	s.entities[id] = &shootingEntity{physics: body, controller: controller, Component: component}
 	s.entitiesMu.Unlock()
@@ -73,7 +73,7 @@ func (s *System) Remove(entity entity.ID) {
 type bullet struct {
 	ID      entity.ID
 	Owner   entity.ID
-	Physics physics.Component
+	Physics world.Component
 }
 
 func (b *bullet) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {

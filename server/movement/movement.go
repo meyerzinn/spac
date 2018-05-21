@@ -5,12 +5,11 @@ import (
 	"github.com/20zinnm/entity"
 	"sync"
 	"github.com/jakecoffman/cp"
-	"github.com/20zinnm/spac/server/physics"
 )
 
 type movementEntity struct {
 	controller Controller
-	physics    physics.Component
+	physics    world.Component
 	move float64
 	turn float64
 }
@@ -58,7 +57,7 @@ func (s *System) Remove(entity entity.ID) {
 	s.entitiesMu.Unlock()
 }
 
-func (s *System) Add(id entity.ID, controller Controller, component physics.Component, move float64, turn float64) {
+func (s *System) Add(id entity.ID, controller Controller, component world.Component, move float64, turn float64) {
 	s.entitiesMu.Lock()
 	s.entities[id] = movementEntity{
 		controller: controller,

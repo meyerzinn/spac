@@ -9,6 +9,7 @@ import (
 	"math"
 	"golang.org/x/image/colornames"
 	"github.com/20zinnm/spac/common/world"
+	"fmt"
 )
 
 type System struct {
@@ -40,6 +41,13 @@ func (s *System) Add(entity entity.ID, renderable Renderable) {
 	s.stateMu.Lock()
 	s.entities[entity] = renderable
 	s.stateMu.Unlock()
+}
+
+func (s *System) Track(trackable Trackable) {
+	s.stateMu.Lock()
+	s.tracking = trackable
+	s.stateMu.Unlock()
+	fmt.Println("tracking")
 }
 
 func (s *System) Update(delta float64) {

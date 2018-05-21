@@ -20,7 +20,6 @@ import (
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
 	"sync/atomic"
-	"github.com/20zinnm/spac/common/ship"
 )
 
 type networkingEntity struct {
@@ -172,7 +171,7 @@ func (s *System) Add(conn net.Connection) {
 						filter:      cp.NewShapeFilter(uint(newShip.ID), 0, cp.ALL_CATEGORIES),
 					}
 					s.world.Lock()
-					newShip.Physics = ship.NewPhysics(s.world.Space, newShip.ID, cp.Vector{}) // todo spawn position should be random
+					newShip.Physics = physics.NewShip(s.world.Space, newShip.ID) // todo spawn position should be random
 					s.world.Unlock()
 					for _, system := range s.manager.Systems() {
 						switch sys := system.(type) {
@@ -213,7 +212,7 @@ func (s *System) Add(conn net.Connection) {
 type shipEntity struct {
 	ID       entity.ID
 	Name     string
-	Physics  physics.Component
+	Physics  world.Component
 	Conn     net.Connection
 	Shooting *shooting.Component
 	Health   *health.Component

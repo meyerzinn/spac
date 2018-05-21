@@ -9,9 +9,8 @@ import (
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/server/physics/collision"
 )
-
-const CollisionType cp.CollisionType = 1 << 2
 
 type Perceiver interface {
 	Position() cp.Vector
@@ -73,9 +72,12 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 
 	nearby := make(map[entity.ID]struct{})
 	s.world.Lock()
-	s.world.Space.BBQuery(cp.NewBBForCircle(perceiver.Position(), 1000), cp.NewShapeFilter(0, uint(CollisionType), uint(CollisionType)), func(shape *cp.Shape, _ interface{}) {
-		nearby[shape.Body().UserData.(entity.ID)] = struct{}{}
-	}, nil)
+	s.world.Space.BBQuery(cp.NewBBForCircle(perceiver.Position(), 1000),
+		cp.NewShapeFilter(0, uint(collision.Perceiving), uint(collision.Perceiving)),
+		func(shape *cp.Shape, _ interface{}) {
+			nearby[shape.Body().UserData.(entity.ID)] = struct{}{}
+		},
+		nil)
 	s.world.Unlock()
 	perceivables := make([]Perceivable, 0, len(nearby))
 	s.perceivablesMu.RLock()
