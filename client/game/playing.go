@@ -29,7 +29,7 @@ type PlayingScene struct {
 func (s *PlayingScene) Update(dt float64) {
 	select {
 	case next := <-s.next:
-		fmt.Println("next scene")
+		fmt.Println("next scene (old:playing)")
 		CurrentScene = next
 	default:
 		s.manager.Update(dt)
@@ -47,7 +47,8 @@ func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 			return
 		case i := <-queue:
 			if i != last {
-				sendControls(conn, i)
+				go sendControls(conn, i)
+				fmt.Println("sending controls")
 				last = i
 			}
 		}

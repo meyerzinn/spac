@@ -32,7 +32,7 @@ func New(win *pixelgl.Window, world *world.World, handler InputHandler) *System 
 		world:    world,
 		handler:  handler,
 		entities: make(map[entity.ID]Renderable),
-		canvas:   pixelgl.NewCanvas(win.Bounds()),
+		canvas:   pixelgl.NewCanvas(win.Bounds().Moved(win.Bounds().Center().Scaled(-1))),
 		imd:      imdraw.New(nil),
 	}
 }
@@ -47,7 +47,7 @@ func (s *System) Track(trackable Trackable) {
 	s.stateMu.Lock()
 	s.tracking = trackable
 	s.stateMu.Unlock()
-	fmt.Println("tracking")
+	fmt.Println("rendering: tracking")
 }
 
 func (s *System) Update(delta float64) {
@@ -55,9 +55,10 @@ func (s *System) Update(delta float64) {
 	s.world.Lock()
 	defer s.world.Unlock()
 	defer s.stateMu.Unlock()
-	targetPosn := pixel.Vec{}
+	var targetPosn pixel.Vec
 	if s.tracking != nil {
 		targetPosn = s.tracking.Position()
+		//fmt.Println(targetPosn)
 	}
 	inputs := Inputs{
 		Left:   s.win.Pressed(pixelgl.KeyA),
@@ -67,13 +68,17 @@ func (s *System) Update(delta float64) {
 	}
 	s.handler.Handle(inputs)
 	if s.win.Bounds() != s.canvas.Bounds() {
-		s.canvas.SetBounds(s.win.Bounds())
+		s.canvas.SetBounds(s.win.Bounds().Moved(s.win.Bounds().Center().Scaled(-1)))
 	}
 	s.camPos = pixel.Lerp(s.camPos, targetPosn, 1-math.Pow(1.0/128, delta))
 	cam := pixel.IM.Moved(s.camPos.Scaled(-1))
+	s.canvas.SetMatrix(cam)
 	s.canvas.Clear(colornames.Black)
 	s.imd.Clear()
-	s.canvas.SetMatrix(cam)
+
+	s.imd.Color = colornames.White
+	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 4)
+
 	for _, entity := range s.entities {
 		entity.Draw(s.imd)
 	}

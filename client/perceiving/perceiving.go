@@ -4,14 +4,14 @@ import (
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/entity"
 	"sync"
-	"github.com/20zinnm/spac/client/physics"
-	"github.com/jakecoffman/cp"
+	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/client/rendering"
-	"github.com/faiface/pixel/imdraw"
-	"image/color"
 	"github.com/faiface/pixel"
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/world"
+	"github.com/jakecoffman/cp"
+	"github.com/faiface/pixel/imdraw"
+	"image/color"
+	"github.com/20zinnm/spac/client/physics"
 )
 
 type Updater interface {
@@ -54,96 +54,99 @@ func (s *System) Perceive(perception *downstream.Perception) {
 	for i := 0; i < perception.EntitiesLength(); i++ {
 		e := new(downstream.Entity)
 		if !perception.Entities(e, i) {
+			panic("failed to decode entity from perception vector")
 			continue
 		}
 		known[e.Id()] = struct{}{}
 		updater, ok := s.entities[e.Id()]
 		if ok {
 			updater.Update(e)
-			continue
-		}
-		switch e.SnapshotType() {
-		case downstream.SnapshotShip:
-			id := e.Id()
-			shipPhysics := physics.NewShip(s.world.Space, id)
-			shipMu := new(sync.Mutex)
-			var armed, thrusting bool
-			for _, system := range s.manager.Systems() {
-				switch sys := system.(type) {
-				case *physics.System:
-					sys.Add(id, shipPhysics)
-				case *rendering.System:
-					sys.Add(id, rendering.RenderableFunc(func(imd *imdraw.IMDraw) {
-						imd.Color = color.RGBA{
-							R: 242,
-							G: 75,
-							B: 105,
-							A: 255,
-						}
-						shipMu.Lock()
-						defer shipMu.Unlock()
-						a := shipPhysics.Angle()
-						p := pixel.Vec(shipPhysics.Position())
-						imd.Push(
-							pixel.Vec{-24, -20}.Rotated(a).Add(p),
-							pixel.Vec{24, -20}.Rotated(a).Add(p),
-							pixel.Vec{0, 40}.Rotated(a).Add(p),
-						)
-						imd.Polygon(0)
-						if thrusting {
+		} else {
+			switch e.SnapshotType() {
+			case downstream.SnapshotShip:
+				id := e.Id()
+				shipPhysics := physics.NewShip(s.world.Space, id)
+				shipMu := new(sync.Mutex)
+				var armed, thrusting bool
+				for _, system := range s.manager.Systems() {
+					switch sys := system.(type) {
+					case *physics.System:
+						sys.Add(id, shipPhysics)
+					case *rendering.System:
+						sys.Add(id, rendering.RenderableFunc(func(imd *imdraw.IMDraw) {
 							imd.Color = color.RGBA{
-								R: 235,
-								G: 200,
-								B: 82,
+								R: 242,
+								G: 75,
+								B: 105,
 								A: 255,
 							}
+							shipMu.Lock()
+							defer shipMu.Unlock()
+							a := shipPhysics.Angle()
+							p := pixel.Vec(shipPhysics.Position())
 							imd.Push(
-								pixel.Vec{-8, -20}.Rotated(a).Add(p),
-								pixel.Vec{8, -20}.Rotated(a).Add(p),
-								pixel.Vec{0, -40}.Rotated(a).Add(p),
+								pixel.Vec{-24, -20}.Rotated(a).Add(p),
+								pixel.Vec{24, -20}.Rotated(a).Add(p),
+								pixel.Vec{0, 40}.Rotated(a).Add(p),
 							)
 							imd.Polygon(0)
-						}
-						if armed {
-							imd.Color = color.RGBA{
-								R: 74,
-								G: 136,
-								B: 212,
-								A: 255,
+							if thrusting {
+								imd.Color = color.RGBA{
+									R: 235,
+									G: 200,
+									B: 82,
+									A: 255,
+								}
+								imd.Push(
+									pixel.Vec{-8, -20}.Rotated(a).Add(p),
+									pixel.Vec{8, -20}.Rotated(a).Add(p),
+									pixel.Vec{0, -40}.Rotated(a).Add(p),
+								)
+								imd.Polygon(0)
 							}
-							imd.Push(p)
-							imd.Circle(8, 0)
-						}
-					}))
-					if id == s.self {
-						sys.Track(rendering.TrackableFunc(func() pixel.Vec {
-							return pixel.Vec(shipPhysics.Position())
+							if armed {
+								imd.Color = color.RGBA{
+									R: 74,
+									G: 136,
+									B: 212,
+									A: 255,
+								}
+								imd.Push(p)
+								imd.Circle(8, 0)
+							}
 						}))
+						if id == s.self {
+							sys.Track(rendering.TrackableFunc(func() pixel.Vec {
+								shipMu.Lock()
+								defer shipMu.Unlock()
+								return pixel.Vec(shipPhysics.Position())
+							}))
+						}
 					}
 				}
+				updater := UpdaterFunc(func(entity *downstream.Entity) {
+					if entity.SnapshotType() != downstream.SnapshotShip {
+						panic("game: tried to update ship with non-ship snapshot")
+					}
+					snapshotTable := new(flatbuffers.Table)
+					if !entity.Snapshot(snapshotTable) {
+						panic("game: could not extract ship snapshot from entity during update")
+					}
+					shipUpdate := new(downstream.Ship)
+					shipUpdate.Init(snapshotTable.Bytes, snapshotTable.Pos)
+					posn := shipUpdate.Position(new(downstream.Vector))
+					vel := shipUpdate.Velocity(new(downstream.Vector))
+					shipMu.Lock()
+					defer shipMu.Unlock()
+					shipPhysics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
+					shipPhysics.SetVelocity(float64(vel.X()), float64(vel.Y()))
+					shipPhysics.SetAngle(float64(shipUpdate.Angle()))
+					thrusting = shipUpdate.Thrusting() > 0
+					armed = shipUpdate.Armed() > 0
+				})
+				updater.Update(e)
+				s.entities[id] = updater
 			}
-			updater := UpdaterFunc(func(entity *downstream.Entity) {
-				if e.SnapshotType() != downstream.SnapshotShip {
-					panic("game: tried to update ship with non-ship snapshot")
-				}
-				snapshotTable := new(flatbuffers.Table)
-				if !e.Snapshot(snapshotTable) {
-					panic("game: could not extract ship snapshot from entity during update")
-				}
-				snap := new(downstream.Ship)
-				snap.Init(snapshotTable.Bytes, snapshotTable.Pos)
-				posn := snap.Position(nil)
-				vel := snap.Velocity(nil)
-				shipMu.Lock()
-				defer shipMu.Unlock()
-				shipPhysics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
-				shipPhysics.SetVelocity(float64(vel.X()), float64(vel.Y()))
-				shipPhysics.SetAngle(float64(snap.Angle()))
-				thrusting = snap.Thrusting() > 0
-				armed = snap.Armed() > 0
-			})
-			updater.Update(e)
-			s.entities[id] = updater
 		}
 	}
 	for id := range s.entities {

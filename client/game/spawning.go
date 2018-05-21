@@ -47,7 +47,7 @@ func NewSpawningScene(ctx context.Context) *SpawningScene {
 func (s *SpawningScene) Update(_ float64) {
 	select {
 	case scene := <-s.next:
-		fmt.Println("next scene")
+		fmt.Println("next scene (old:spawning)")
 		CurrentScene = scene
 	default:
 	}

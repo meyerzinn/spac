@@ -22,7 +22,7 @@ type ConnectingScene struct {
 func (s *ConnectingScene) Update(dt float64) {
 	select {
 	case scene := <-s.next:
-		fmt.Println("next scene")
+		fmt.Println("next scene (old:connecting)")
 		CurrentScene = scene
 	default:
 	}

@@ -6,10 +6,10 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/entity"
-	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/server/physics/collision"
+	"github.com/20zinnm/spac/common/net"
 )
 
 type Perceiver interface {
@@ -87,22 +87,24 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 		}
 	}
 	s.perceivablesMu.RUnlock()
-	var snapshots []flatbuffers.UOffsetT
+	var entities []flatbuffers.UOffsetT
 	for _, perceivable := range perceivables {
 		_, known := perceiver.known[id]
-		snapshots = append(snapshots, perceivable.Snapshot(b, known))
+		entities = append(entities, perceivable.Snapshot(b, known))
 		if !known {
 			perceiver.known[id] = struct{}{}
 		}
 	}
-	downstream.PerceptionStartEntitiesVector(b, len(snapshots))
-	for _, snapshot := range snapshots {
-		b.PrependUOffsetT(snapshot)
+	downstream.PerceptionStartEntitiesVector(b, len(entities))
+	for _, entity := range entities {
+		b.PrependUOffsetT(entity)
 	}
-	entities := b.EndVector(len(snapshots))
+	entitiesVec := b.EndVector(len(entities))
 	downstream.PerceptionStart(b)
-	downstream.PerceptionAddEntities(b, entities)
-	go perceiver.Perceive(net.MessageDown(b, downstream.PacketPerception, downstream.PerceptionEnd(b)))
+	downstream.PerceptionAddEntities(b, entitiesVec)
+	perception := net.MessageDown(b, downstream.PacketPerception, downstream.PerceptionEnd(b))
+	//fmt.Println(perception)
+	go perceiver.Perceive(perception)
 }
 
 func (s *System) Remove(entity entity.ID) {

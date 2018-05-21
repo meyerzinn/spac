@@ -5,6 +5,7 @@ import (
 	"golang.org/x/image/colornames"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/20zinnm/spac/common/net"
+	"fmt"
 )
 
 type MenuScene struct {
@@ -30,5 +31,6 @@ func (m *MenuScene) Update(_ float64) {
 	if win.JustPressed(pixelgl.KeyEnter) {
 		sendSpawn(m.ctx.Value(CtxConnectionKey).(net.Connection), m.name)
 		CurrentScene = NewSpawningScene(m.ctx)
+		fmt.Println("next scene (old:menu)")
 	}
 }
