@@ -12,6 +12,7 @@ import (
 	"github.com/faiface/pixel/imdraw"
 	"image/color"
 	"github.com/20zinnm/spac/client/physics"
+	"time"
 )
 
 type Updater interface {
@@ -25,18 +26,22 @@ func (fn UpdaterFunc) Update(e *downstream.Entity) {
 }
 
 type System struct {
-	manager    *entity.Manager
-	world      *world.World
-	self       entity.ID
-	entitiesMu sync.RWMutex
-	entities   map[entity.ID]Updater
+	manager *entity.Manager
+	world   *world.World
+	// stateMu guards self, entities, and last
+	stateMu  sync.RWMutex
+	self     entity.ID
+	//latency  *int64
+	entities map[entity.ID]Updater
+	last     time.Time // ns since last update
 }
 
-func New(manager *entity.Manager, world *world.World, self entity.ID) *System {
+func New(manager *entity.Manager, world *world.World, self entity.ID,/* latency *int64*/) *System {
 	return &System{
 		manager:  manager,
 		world:    world,
 		self:     self,
+		//latency:  latency,
 		entities: make(map[entity.ID]Updater),
 	}
 }
@@ -45,10 +50,14 @@ func (s *System) Update(delta float64) {
 }
 
 func (s *System) Perceive(perception *downstream.Perception) {
-	s.entitiesMu.Lock()
+	s.stateMu.Lock()
 	s.world.Lock()
 	defer s.world.Unlock()
-	defer s.entitiesMu.Unlock()
+	defer s.stateMu.Unlock()
+
+	//now := time.Now()
+	//delta := now.Sub(s.last).Seconds()
+	//s.last = now
 
 	known := make(map[entity.ID]struct{}, perception.EntitiesLength())
 	for i := 0; i < perception.EntitiesLength(); i++ {
@@ -73,6 +82,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 					case *physics.System:
 						sys.Add(id, shipPhysics)
 					case *rendering.System:
+						//var lastPosn pixel.Vec
 						sys.Add(id, rendering.RenderableFunc(func(imd *imdraw.IMDraw) {
 							imd.Color = color.RGBA{
 								R: 242,
@@ -83,6 +93,8 @@ func (s *System) Perceive(perception *downstream.Perception) {
 							shipMu.Lock()
 							defer shipMu.Unlock()
 							a := shipPhysics.Angle()
+							//p := pixel.Lerp(pixel.Vec(shipPhysics.Position()), lastPosn, 1-math.Pow(1/128, delta))
+							//lastPosn = pixel.Vec(shipPhysics.Position())
 							p := pixel.Vec(shipPhysics.Position())
 							imd.Push(
 								pixel.Vec{-24, -20}.Rotated(a).Add(p),
@@ -157,7 +169,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.entitiesMu.Lock()
+	s.stateMu.Lock()
 	delete(s.entities, entity)
-	s.entitiesMu.Unlock()
+	s.stateMu.Unlock()
 }

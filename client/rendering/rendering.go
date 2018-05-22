@@ -70,14 +70,16 @@ func (s *System) Update(delta float64) {
 	if s.win.Bounds() != s.canvas.Bounds() {
 		s.canvas.SetBounds(s.win.Bounds().Moved(s.win.Bounds().Center().Scaled(-1)))
 	}
-	s.camPos = pixel.Lerp(s.camPos, targetPosn, 1-math.Pow(1.0/128, delta))
+	s.camPos = pixel.Lerp(s.camPos, targetPosn, 1/*-math.Pow(1.0/128, delta)*/)
 	cam := pixel.IM.Moved(s.camPos.Scaled(-1))
 	s.canvas.SetMatrix(cam)
 	s.canvas.Clear(colornames.Black)
 	s.imd.Clear()
 
+	s.imd.Color = colornames.Darkgray
+	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 3)
 	s.imd.Color = colornames.White
-	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 4)
+	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 1)
 
 	for _, entity := range s.entities {
 		entity.Draw(s.imd)

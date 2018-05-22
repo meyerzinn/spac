@@ -1,0 +1,5 @@
+namespace spac.downstream;
+
+table Pong {
+    timestamp:int64;
+}

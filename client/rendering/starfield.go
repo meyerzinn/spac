@@ -3,7 +3,6 @@ package rendering
 import (
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel"
-	"math"
 )
 
 const (
@@ -13,8 +12,8 @@ const (
 
 func drawStars(imd *imdraw.IMDraw, cam pixel.Vec, bounds pixel.Rect, starscale int) {
 	size := StarTileSize / starscale
-	xoff := int(math.Floor(cam.X))
-	yoff := int(math.Floor(cam.Y))
+	xoff := int(cam.X)
+	yoff := int(cam.Y)
 	w := int(bounds.W())
 	h := int(bounds.H())
 	sx := ((xoff-w/2)/size)*size - size

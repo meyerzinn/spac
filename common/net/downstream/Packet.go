@@ -4,14 +4,16 @@ package downstream
 
 const (
 	PacketNONE = 0
-	PacketServerSettings = 1
-	PacketSpawn = 2
-	PacketPerception = 3
-	PacketDeath = 4
+	PacketPong = 1
+	PacketServerSettings = 2
+	PacketSpawn = 3
+	PacketPerception = 4
+	PacketDeath = 5
 )
 
 var EnumNamesPacket = map[int]string{
 	PacketNONE:"NONE",
+	PacketPong:"Pong",
 	PacketServerSettings:"ServerSettings",
 	PacketSpawn:"Spawn",
 	PacketPerception:"Perception",

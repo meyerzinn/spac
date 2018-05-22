@@ -1,9 +1,10 @@
+include "ping.fbs";
 include "spawn.fbs";
 include "controls.fbs";
 
 namespace spac.upstream;
 
-union Packet { Spawn, Controls }
+union Packet { Ping, Spawn, Controls }
 
 table Message {
   packet:Packet;

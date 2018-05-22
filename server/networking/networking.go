@@ -145,6 +145,14 @@ func (s *System) Add(conn net.Connection) {
 			if message.Packet(packetTable) {
 				switch message.PacketType() {
 				case upstream.PacketNONE:
+				case upstream.PacketPing:
+					ping := new(upstream.Ping)
+					ping.Init(packetTable.Bytes, packetTable.Pos)
+					b := builders.Get()
+					downstream.PongStart(b)
+					downstream.PongAddTimestamp(b, time.Now().UnixNano())
+					conn.Write(net.MessageDown(b, downstream.PacketPong, downstream.PongEnd(b)))
+					builders.Put(b)
 				case upstream.PacketSpawn:
 					play := new(upstream.Spawn)
 					play.Init(packetTable.Bytes, packetTable.Pos)
