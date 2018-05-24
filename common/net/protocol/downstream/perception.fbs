@@ -9,6 +9,7 @@ table Ship {
     position:Vector;
     velocity:Vector;
     angle:float32;
+    angularVelocity:float32;
     thrusting:bool;
     armed:bool;
     health:int16;

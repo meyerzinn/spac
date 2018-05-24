@@ -2,20 +2,16 @@ package game
 
 import (
 	"github.com/20zinnm/spac/common/net"
-	"context"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"log"
 	"github.com/google/flatbuffers/go"
 	"net/url"
 	"github.com/gorilla/websocket"
 	"fmt"
+	"github.com/faiface/pixel/pixelgl"
 )
 
-var CtxConnectionKey = "connection"
-var CtxWorldRadiusKey = "worldRadius"
-
 type ConnectingScene struct {
-	ctx  context.Context
 	next chan Scene
 }
 
@@ -28,7 +24,7 @@ func (s *ConnectingScene) Update(dt float64) {
 	}
 }
 
-func NewConnecting(ctx context.Context, host string) *ConnectingScene {
+func newConnecting(win *pixelgl.Window, host string) *ConnectingScene {
 	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
 	log.Printf("connecting to %s", u.String())
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -38,35 +34,25 @@ func NewConnecting(ctx context.Context, host string) *ConnectingScene {
 	log.Print("connected")
 	conn := net.Websocket(c)
 	scene := &ConnectingScene{
-		ctx:  context.WithValue(ctx, CtxConnectionKey, conn),
 		next: make(chan Scene),
 	}
 	go func() {
 		for {
-			select {
-			case <-scene.ctx.Done():
-				return
-			default:
-				data, err := conn.Read()
-				if err != nil {
-					fmt.Println("disconnected", err)
-					ctx.Done()
-					return
-				}
-				message := downstream.GetRootAsMessage(data, 0)
-				if message.PacketType() != downstream.PacketServerSettings {
-					log.Println("received packet other than settings at connecting scene; discarding")
-					continue
-				}
-				packetTable := new(flatbuffers.Table)
-				if !message.Packet(packetTable) {
-					log.Fatalln("failed to decode settings packet")
-				}
-				settings := new(downstream.ServerSettings)
-				settings.Init(packetTable.Bytes, packetTable.Pos)
-				scene.next <- NewMenuScene(context.WithValue(scene.ctx, CtxWorldRadiusKey, settings.WorldRadius()))
-				return
+			message, err := readMessage(conn)
+			if err != nil {
+				log.Fatalln(err)
 			}
+			if message.PacketType() != downstream.PacketServerSettings {
+				log.Fatalln("received non-settings packet first; aborting")
+			}
+			packetTable := new(flatbuffers.Table)
+			if !message.Packet(packetTable) {
+				log.Fatalln("failed to decode settings packet")
+			}
+			settings := new(downstream.ServerSettings)
+			settings.Init(packetTable.Bytes, packetTable.Pos)
+			scene.next <- newMenu(win, conn)
+			return
 		}
 	}()
 	return scene

@@ -53,7 +53,7 @@ func (s *System) Update(delta float64) {
 	defer s.entitiesMu.RUnlock()
 	for id, d := range s.entities {
 		if *d <= 0 {
-			go s.manager.Remove(id)
+			s.manager.Remove(id)
 		}
 	}
 }

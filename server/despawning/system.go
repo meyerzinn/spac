@@ -15,9 +15,9 @@ func New(manager *entity.Manager) *System {
 	return &System{manager: manager, entities: make(map[entity.ID]*Component)}
 }
 
-func (s *System) Add(entity entity.ID, ttl int) {
+func (s *System) Add(entity entity.ID, component Component) {
 	s.entitiesMu.Lock()
-	s.entities[entity] = &Component{TTL: uint(ttl), alive: 0}
+	s.entities[entity] = &component
 	s.entitiesMu.Unlock()
 }
 
@@ -28,7 +28,8 @@ func (s *System) Update(delta float64) {
 	for id, component := range s.entities {
 		component.alive++
 		if component.alive >= component.TTL {
-			go s.manager.Remove(id)
+			s.manager.Remove(id)
+			delete(s.entities, id)
 		}
 	}
 }

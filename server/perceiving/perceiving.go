@@ -21,6 +21,12 @@ type Perceivable interface {
 	Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT
 }
 
+type PerceivableFunc func(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT
+
+func (fn PerceivableFunc) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
+	return fn(builder, known)
+}
+
 type perceivingEntity struct {
 	Perceiver
 	known map[entity.ID]struct{}
@@ -79,22 +85,37 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 		},
 		nil)
 	s.world.Unlock()
-	perceivables := make([]Perceivable, 0, len(nearby))
+	perceivables := make([]struct {
+		Perceivable
+		entity.ID
+	}, 0, len(nearby)+1)
 	s.perceivablesMu.RLock()
+	// include self
+	if _, ok := s.perceivables[id]; ok {
+		nearby[id] = struct{}{}
+	}
 	for eid := range nearby {
 		if p, ok := s.perceivables[eid]; ok {
-			perceivables = append(perceivables, p)
+			perceivables = append(perceivables, struct {
+				Perceivable
+				entity.ID
+			}{
+				Perceivable: p,
+				ID:          eid,
+			})
 		}
 	}
 	s.perceivablesMu.RUnlock()
 	var entities []flatbuffers.UOffsetT
+	s.world.RLock()
 	for _, perceivable := range perceivables {
-		_, known := perceiver.known[id]
+		_, known := perceiver.known[perceivable.ID]
 		entities = append(entities, perceivable.Snapshot(b, known))
 		if !known {
-			perceiver.known[id] = struct{}{}
+			perceiver.known[perceivable.ID] = struct{}{}
 		}
 	}
+	s.world.RUnlock()
 	downstream.PerceptionStartEntitiesVector(b, len(entities))
 	for _, entity := range entities {
 		b.PrependUOffsetT(entity)

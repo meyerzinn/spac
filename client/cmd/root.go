@@ -29,11 +29,13 @@ import (
 	"github.com/spf13/viper"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/20zinnm/spac/client/game"
+	"github.com/pkg/profile"
 )
 
 var (
 	cfgFile string
 	host    string
+	prof    bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -42,6 +44,9 @@ var rootCmd = &cobra.Command{
 	Short: "Runs a spac client",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		if prof {
+			defer profile.Start(profile.ProfilePath("."), profile.TraceProfile).Stop()
+		}
 		pixelgl.Run(func() { game.Run(host) })
 	},
 }
@@ -59,6 +64,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.Flags().StringVar(&host, "host", "localhost:8080", "The host to connect to")
+	rootCmd.Flags().BoolVar(&prof, "profile", false, "Enable profiling")
 }
 
 // initConfig reads in config file and ENV variables if set.

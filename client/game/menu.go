@@ -1,36 +1,39 @@
 package game
 
 import (
-	"context"
 	"golang.org/x/image/colornames"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/20zinnm/spac/common/net"
 	"fmt"
+	"github.com/faiface/pixel/text"
 )
 
 type MenuScene struct {
-	ctx  context.Context
+	win  *pixelgl.Window
+	conn net.Connection
+	text *text.Text
 	name string
 }
 
-func NewMenuScene(ctx context.Context) Scene {
+func newMenu(win *pixelgl.Window, conn net.Connection) *MenuScene {
 	return &MenuScene{
-		ctx: ctx,
+		win:  win,
+		conn: conn,
+		//ctx:  ctx,
+		//text: text.New(pixel.V(100, 100), nil),
 	}
 }
 
-func (m *MenuScene) Update(_ float64) {
-	win := m.ctx.Value(CtxWindowKey).(*pixelgl.Window)
-	win.Clear(colornames.Blue)
-	m.name += win.Typed()
-	if len(win.Typed()) > 0 {
+func (s *MenuScene) Update(_ float64) {
+	s.win.Clear(colornames.Black)
+	s.name += s.win.Typed()
+	if len(s.win.Typed()) > 0 {
 	}
-	if win.JustPressed(pixelgl.KeyDelete) {
-		m.name = ""
+	if s.win.JustPressed(pixelgl.KeyDelete) {
+		s.name = ""
 	}
-	if win.JustPressed(pixelgl.KeyEnter) {
-		sendSpawn(m.ctx.Value(CtxConnectionKey).(net.Connection), m.name)
-		CurrentScene = NewSpawningScene(m.ctx)
+	if s.win.JustPressed(pixelgl.KeyEnter) {
+		CurrentScene = newSpawning(s.win, s.conn, s.name)
 		fmt.Println("next scene (old:menu)")
 	}
 }

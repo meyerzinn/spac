@@ -1,7 +1,6 @@
 package game
 
 import (
-	"context"
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/client/perceiving"
 	"github.com/20zinnm/spac/common/net"
@@ -21,7 +20,8 @@ import (
 )
 
 type PlayingScene struct {
-	ctx        context.Context
+	win        *pixelgl.Window
+	conn       net.Connection
 	manager    *entity.Manager
 	perceiving *perceiving.System
 	next       chan Scene
@@ -37,6 +37,7 @@ func (s *PlayingScene) Update(dt float64) {
 	case next := <-s.next:
 		fmt.Println("next scene (old:playing)")
 		CurrentScene = next
+		close(s.done)
 	default:
 		lastPerception := atomic.LoadInt64(&s.lastPerception)
 		//latency := atomic.LoadInt64(&s.latency)
@@ -49,7 +50,6 @@ func (s *PlayingScene) Update(dt float64) {
 }
 
 func (s *PlayingScene) writer(queue chan rendering.Inputs) {
-	conn := s.ctx.Value(CtxConnectionKey).(net.Connection)
 	last := rendering.Inputs{}
 	pinger := time.NewTicker(time.Second)
 	defer pinger.Stop()
@@ -57,72 +57,64 @@ func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 		select {
 		case <-s.done:
 			return
-		case <-s.ctx.Done():
-			return
+		case <-pinger.C:
+			sendPing(s.conn, time.Now().UnixNano())
 		case i := <-queue:
 			if i != last {
-				sendControls(conn, i)
+				sendControls(s.conn, i)
 				fmt.Println("sending controls")
 				last = i
 			}
-		case <-pinger.C:
-			sendPing(conn, time.Now().UnixNano())
 		}
 	}
 }
 
 func (s *PlayingScene) reader() {
-	conn := s.ctx.Value(CtxConnectionKey).(net.Connection)
-	defer close(s.done)
 	for {
-		select {
-		case <-s.ctx.Done():
+		data, err := s.conn.Read()
+		if err != nil {
+			log.Println("disconnected")
+			os.Exit(0)
+			// todo just go back to connecting and try again instead of exiting
 			return
-		default:
-			data, err := conn.Read()
-			if err != nil {
-				log.Println("disconnected")
-				os.Exit(0)
-				// todo just go back to connecting and try again instead of exiting
-				return
-			}
-			message := downstream.GetRootAsMessage(data, 0)
-			packetTable := new(flatbuffers.Table)
-			if !message.Packet(packetTable) {
-				log.Println("error decoding message; skipping")
-			}
-			switch message.PacketType() {
-			case downstream.PacketPong:
-				pong := new(downstream.Pong)
-				pong.Init(packetTable.Bytes, packetTable.Pos)
-				//atomic.SwapInt64(&s.latency, time.Now().UnixNano()-pong.Timestamp())
-			case downstream.PacketPerception:
-				perception := new(downstream.Perception)
-				perception.Init(packetTable.Bytes, packetTable.Pos)
-				atomic.SwapInt64(&s.lastPerception, time.Now().UnixNano())
-				s.perceiving.Perceive(perception)
-			case downstream.PacketDeath:
-				s.next <- NewMenuScene(s.ctx)
-				return
-			}
+		}
+		message := downstream.GetRootAsMessage(data, 0)
+		packetTable := new(flatbuffers.Table)
+		if !message.Packet(packetTable) {
+			log.Println("error decoding message; skipping")
+		}
+		switch message.PacketType() {
+		case downstream.PacketPong:
+			pong := new(downstream.Pong)
+			pong.Init(packetTable.Bytes, packetTable.Pos)
+			//atomic.SwapInt64(&s.latency, time.Now().UnixNano()-pong.Timestamp())
+		case downstream.PacketPerception:
+			perception := new(downstream.Perception)
+			perception.Init(packetTable.Bytes, packetTable.Pos)
+			atomic.SwapInt64(&s.lastPerception, time.Now().UnixNano())
+			s.perceiving.Perceive(perception)
+		case downstream.PacketDeath:
+			s.next <- newMenu(s.win, s.conn)
+			return
 		}
 	}
 }
 
-func NewPlayingScene(ctx context.Context) *PlayingScene {
+func newPlaying(win *pixelgl.Window, conn net.Connection, self entity.ID) *PlayingScene {
 	manager := new(entity.Manager)
 	scene := &PlayingScene{
-		ctx:     ctx,
+		win:     win,
+		conn:    conn,
 		manager: manager,
 		next:    make(chan Scene),
 		done:    make(chan struct{}),
 	}
 	w := &world.World{Space: world.NewSpace()}
-	scene.perceiving = perceiving.New(manager, w, ctx.Value(CtxTargetIDKey).(entity.ID), /*&scene.latency*/)
+	scene.perceiving = perceiving.New(manager, w, self)
 	manager.AddSystem(scene.perceiving)
 	manager.AddSystem(physics.New(w))
 	inputsQueue := make(chan rendering.Inputs, 16)
-	manager.AddSystem(rendering.New(ctx.Value(CtxWindowKey).(*pixelgl.Window), w, rendering.InputHandlerFunc(func(i rendering.Inputs) {
+	manager.AddSystem(rendering.New(win, w, rendering.InputHandlerFunc(func(i rendering.Inputs) {
 		inputsQueue <- i
 	})))
 	go scene.writer(inputsQueue)
@@ -147,4 +139,11 @@ func sendPing(conn net.Connection, time int64) {
 	upstream.PingStart(b)
 	upstream.PingAddTimestamp(b, time)
 	conn.Write(net.MessageUp(b, upstream.PacketPing, upstream.PingEnd(b)))
+}
+
+func boolToByte(val bool) byte {
+	if val {
+		return 1
+	}
+	return 0
 }

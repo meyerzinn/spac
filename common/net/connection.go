@@ -43,13 +43,9 @@ func (c *WebsocketConnection) writer() {
 }
 
 func (c *WebsocketConnection) Write(message []byte) {
-	for {
-		select {
-		case <-c.done:
-			return
-		case c.out <- message:
-			return
-		}
+	select {
+	case <-c.done:
+	case c.out <- message:
 	}
 }
 

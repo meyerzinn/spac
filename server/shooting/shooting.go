@@ -4,16 +4,16 @@ import (
 	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/entity"
 	"sync"
-	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/server/despawning"
 	"github.com/20zinnm/spac/server/perceiving"
-	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/server/physics"
+	"github.com/20zinnm/spac/server/entities/bullet"
 )
 
 type shootingEntity struct {
-	physics    world.Component
 	controller Controller
+	last       Controls
+	physics    world.Component
 	*Component
 }
 
@@ -32,7 +32,7 @@ func New(manager *entity.Manager, world *world.World) *System {
 	}
 }
 
-func (s *System) Add(id entity.ID, controller Controller, body world.Component, component *Component) {
+func (s *System) Add(id entity.ID, component *Component, controller Controller, body world.Component) {
 	s.entitiesMu.Lock()
 	s.entities[id] = &shootingEntity{physics: body, controller: controller, Component: component}
 	s.entitiesMu.Unlock()
@@ -43,23 +43,30 @@ func (s *System) Update(delta float64) {
 	defer s.entitiesMu.RUnlock()
 
 	for owner, e := range s.entities {
-		if e.Component.Armed() && e.controller.Controls().Shooting {
-			var bullet bullet
-			bullet.Owner = owner
-			bullet.ID = s.manager.NewEntity()
+		select {
+		case n := <-e.controller:
+			e.last = n
+		default:
+		}
+		if e.tta > 0 {
+			e.tta--
+		}
+		if e.tta == 0 && e.last.Shooting {
+			id := s.manager.NewEntity()
 			s.world.Lock()
-			bullet.Physics = NewBullet(s.world.Space, bullet.ID, owner, e.physics.Angle(), e.BulletVelocity)
+			physicsC := bullet.Physics(s.world.Space, id, owner, e.physics, e.BulletForce)
 			s.world.Unlock()
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
 				case *physics.System:
-					sys.Add(bullet.ID, bullet.Physics)
+					sys.Add(id, physicsC)
 				case *despawning.System:
-					sys.Add(bullet.ID, 120)
+					sys.Add(id, bullet.Despawning(e.BulletLifetime))
 				case *perceiving.System:
-					sys.AddPerceivable(bullet.ID, &bullet)
+					sys.AddPerceivable(id, bullet.Perceivable(id, physicsC))
 				}
 			}
+			e.tta = e.Cooldown
 		}
 	}
 }
@@ -68,24 +75,4 @@ func (s *System) Remove(entity entity.ID) {
 	s.entitiesMu.Lock()
 	delete(s.entities, entity)
 	s.entitiesMu.Unlock()
-}
-
-type bullet struct {
-	ID      entity.ID
-	Owner   entity.ID
-	Physics world.Component
-}
-
-func (b *bullet) Snapshot(builder *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
-	downstream.BulletStart(builder)
-	position := b.Physics.Position()
-	downstream.BulletAddPosition(builder, downstream.CreateVector(builder, float32(position.X), float32(position.Y)))
-	velocity := b.Physics.Velocity()
-	downstream.BulletAddVelocity(builder, downstream.CreateVector(builder, float32(velocity.X), float32(velocity.Y)))
-	snap := downstream.BulletEnd(builder)
-	downstream.EntityStart(builder)
-	downstream.EntityAddId(builder, b.ID)
-	downstream.EntityAddSnapshot(builder, snap)
-	downstream.EntityAddSnapshotType(builder, downstream.SnapshotBullet)
-	return downstream.EntityEnd(builder)
 }

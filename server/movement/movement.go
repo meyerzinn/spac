@@ -7,23 +7,26 @@ import (
 	"github.com/jakecoffman/cp"
 )
 
+type Controller chan Controls
+
 type movementEntity struct {
-	controller Controller
-	physics    world.Component
-	move float64
-	turn float64
+	in      Controller
+	last    Controls
+	physics world.Component
+	linear  float64
+	angular float64
 }
 
 type System struct {
 	entitiesMu sync.RWMutex
-	entities   map[entity.ID]movementEntity
+	entities   map[entity.ID]*movementEntity
 	world      *world.World
 }
 
 func New(world *world.World) *System {
 	return &System{
 		world:    world,
-		entities: make(map[entity.ID]movementEntity),
+		entities: make(map[entity.ID]*movementEntity),
 	}
 }
 
@@ -33,18 +36,20 @@ func (s *System) Update(delta float64) {
 	s.world.Lock()
 	defer s.world.Unlock()
 	for _, e := range s.entities {
-		controls := e.controller.Controls()
-		if controls.Left != controls.Right {
-			if controls.Left {
-				e.physics.SetAngularVelocity(e.turn)
-			} else {
-				e.physics.SetAngularVelocity(-e.turn)
-			}
-		} else {
-			e.physics.SetAngularVelocity(0)
+		select {
+		case n := <-e.in:
+			e.last = n
+		default:
 		}
-		if controls.Thrusting {
-			e.physics.SetForce(e.physics.Rotation().Rotate(cp.Vector{Y: e.move}))
+		if e.last.Left != e.last.Right {
+			if e.last.Left {
+				e.physics.SetAngularVelocity(e.angular)
+			} else {
+				e.physics.SetAngularVelocity(-e.angular)
+			}
+		}
+		if e.last.Thrusting {
+			e.physics.SetForce(e.physics.Rotation().Rotate(cp.Vector{Y: e.linear}))
 		}
 	}
 }
@@ -57,13 +62,13 @@ func (s *System) Remove(entity entity.ID) {
 	s.entitiesMu.Unlock()
 }
 
-func (s *System) Add(id entity.ID, controller Controller, component world.Component, move float64, turn float64) {
+func (s *System) Add(id entity.ID, controller Controller, physics world.Component, linearForce float64, angularVelocity float64) {
 	s.entitiesMu.Lock()
-	s.entities[id] = movementEntity{
-		controller: controller,
-		physics:    component,
-		move: move,
-		turn: turn,
+	s.entities[id] = &movementEntity{
+		in:      controller,
+		physics: physics,
+		linear:  linearForce,
+		angular: angularVelocity,
 	}
 	s.entitiesMu.Unlock()
 }

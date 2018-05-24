@@ -6,41 +6,41 @@ import (
 	"sync"
 	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/client/rendering"
-	"github.com/faiface/pixel"
-	"github.com/google/flatbuffers/go"
-	"github.com/jakecoffman/cp"
-	"github.com/faiface/pixel/imdraw"
-	"image/color"
 	"github.com/20zinnm/spac/client/physics"
 	"time"
+	"github.com/20zinnm/spac/client/entities/ship"
+	"github.com/google/flatbuffers/go"
+	"github.com/20zinnm/spac/client/entities/bullet"
+	"github.com/faiface/pixel"
+	"fmt"
 )
 
 type Updater interface {
-	Update(*downstream.Entity)
+	Update(bytes []byte, pos flatbuffers.UOffsetT)
 }
 
-type UpdaterFunc func(*downstream.Entity)
+type UpdaterFunc func([]byte, flatbuffers.UOffsetT)
 
-func (fn UpdaterFunc) Update(e *downstream.Entity) {
-	fn(e)
+func (fn UpdaterFunc) Update(bytes []byte, pos flatbuffers.UOffsetT) {
+	fn(bytes, pos)
 }
 
 type System struct {
 	manager *entity.Manager
 	world   *world.World
 	// stateMu guards self, entities, and last
-	stateMu  sync.RWMutex
-	self     entity.ID
+	stateMu sync.RWMutex
+	self    entity.ID
 	//latency  *int64
 	entities map[entity.ID]Updater
 	last     time.Time // ns since last update
 }
 
-func New(manager *entity.Manager, world *world.World, self entity.ID,/* latency *int64*/) *System {
+func New(manager *entity.Manager, world *world.World, self entity.ID, /* latency *int64*/) *System {
 	return &System{
-		manager:  manager,
-		world:    world,
-		self:     self,
+		manager: manager,
+		world:   world,
+		self:    self,
 		//latency:  latency,
 		entities: make(map[entity.ID]Updater),
 	}
@@ -63,107 +63,59 @@ func (s *System) Perceive(perception *downstream.Perception) {
 	for i := 0; i < perception.EntitiesLength(); i++ {
 		e := new(downstream.Entity)
 		if !perception.Entities(e, i) {
-			panic("failed to decode entity from perception vector")
+			panic("failed to retrieve entity from perception vector")
 			continue
+		}
+		snapshotTable := new(flatbuffers.Table)
+		if !e.Snapshot(snapshotTable) {
+			panic("could not decode snapshot from entity during update")
 		}
 		known[e.Id()] = struct{}{}
 		updater, ok := s.entities[e.Id()]
 		if ok {
-			updater.Update(e)
+			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
 		} else {
+			id := e.Id()
+			var updater Updater
 			switch e.SnapshotType() {
 			case downstream.SnapshotShip:
-				id := e.Id()
-				shipPhysics := physics.NewShip(s.world.Space, id)
-				shipMu := new(sync.Mutex)
+				physicsC := ship.Physics(s.world.Space, id)
 				var armed, thrusting bool
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
 					case *physics.System:
-						sys.Add(id, shipPhysics)
+						sys.Add(id, physicsC)
 					case *rendering.System:
 						//var lastPosn pixel.Vec
-						sys.Add(id, rendering.RenderableFunc(func(imd *imdraw.IMDraw) {
-							imd.Color = color.RGBA{
-								R: 242,
-								G: 75,
-								B: 105,
-								A: 255,
-							}
-							shipMu.Lock()
-							defer shipMu.Unlock()
-							a := shipPhysics.Angle()
-							//p := pixel.Lerp(pixel.Vec(shipPhysics.Position()), lastPosn, 1-math.Pow(1/128, delta))
-							//lastPosn = pixel.Vec(shipPhysics.Position())
-							p := pixel.Vec(shipPhysics.Position())
-							imd.Push(
-								pixel.Vec{-24, -20}.Rotated(a).Add(p),
-								pixel.Vec{24, -20}.Rotated(a).Add(p),
-								pixel.Vec{0, 40}.Rotated(a).Add(p),
-							)
-							imd.Polygon(0)
-							if thrusting {
-								imd.Color = color.RGBA{
-									R: 235,
-									G: 200,
-									B: 82,
-									A: 255,
-								}
-								imd.Push(
-									pixel.Vec{-8, -20}.Rotated(a).Add(p),
-									pixel.Vec{8, -20}.Rotated(a).Add(p),
-									pixel.Vec{0, -40}.Rotated(a).Add(p),
-								)
-								imd.Polygon(0)
-							}
-							if armed {
-								imd.Color = color.RGBA{
-									R: 74,
-									G: 136,
-									B: 212,
-									A: 255,
-								}
-								imd.Push(p)
-								imd.Circle(8, 0)
-							}
-						}))
+						sys.Add(id, ship.Renderable(physicsC, &thrusting, &armed))
 						if id == s.self {
 							sys.Track(rendering.TrackableFunc(func() pixel.Vec {
-								shipMu.Lock()
-								defer shipMu.Unlock()
-								return pixel.Vec(shipPhysics.Position())
+								return pixel.Vec(physicsC.Position())
 							}))
 						}
 					}
 				}
-				updater := UpdaterFunc(func(entity *downstream.Entity) {
-					if entity.SnapshotType() != downstream.SnapshotShip {
-						panic("game: tried to update ship with non-ship snapshot")
+				updater = UpdaterFunc(ship.Updater(physicsC, &thrusting, &armed))
+			case downstream.SnapshotBullet:
+				id := e.Id()
+				physicsC := bullet.Physics(s.world.Space)
+				for _, system := range s.manager.Systems() {
+					switch sys := system.(type) {
+					case *physics.System:
+						sys.Add(id, physicsC)
+					case *rendering.System:
+						sys.Add(id, bullet.Renderable(physicsC))
 					}
-					snapshotTable := new(flatbuffers.Table)
-					if !entity.Snapshot(snapshotTable) {
-						panic("game: could not extract ship snapshot from entity during update")
-					}
-					shipUpdate := new(downstream.Ship)
-					shipUpdate.Init(snapshotTable.Bytes, snapshotTable.Pos)
-					posn := shipUpdate.Position(new(downstream.Vector))
-					vel := shipUpdate.Velocity(new(downstream.Vector))
-					shipMu.Lock()
-					defer shipMu.Unlock()
-					shipPhysics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
-					shipPhysics.SetVelocity(float64(vel.X()), float64(vel.Y()))
-					shipPhysics.SetAngle(float64(shipUpdate.Angle()))
-					thrusting = shipUpdate.Thrusting() > 0
-					armed = shipUpdate.Armed() > 0
-				})
-				updater.Update(e)
-				s.entities[id] = updater
+				}
+				updater = UpdaterFunc(bullet.Updater(physicsC))
 			}
+			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
+			s.entities[id] = updater
 		}
 	}
 	for id := range s.entities {
 		if _, ok := known[id]; !ok {
-			go s.manager.Remove(id)
+			s.manager.Remove(id)
 		}
 	}
 }
@@ -171,5 +123,8 @@ func (s *System) Perceive(perception *downstream.Perception) {
 func (s *System) Remove(entity entity.ID) {
 	s.stateMu.Lock()
 	delete(s.entities, entity)
+	if entity == s.self {
+		fmt.Println("died")
+	}
 	s.stateMu.Unlock()
 }

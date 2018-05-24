@@ -64,19 +64,19 @@ func (rcv *Ship) MutateAngle(n float32) bool {
 	return rcv._tab.MutateFloat32Slot(8, n)
 }
 
-func (rcv *Ship) Thrusting() byte {
+func (rcv *Ship) AngularVelocity() float32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		return rcv._tab.GetByte(o + rcv._tab.Pos)
+		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
 	}
-	return 0
+	return 0.0
 }
 
-func (rcv *Ship) MutateThrusting(n byte) bool {
-	return rcv._tab.MutateByteSlot(10, n)
+func (rcv *Ship) MutateAngularVelocity(n float32) bool {
+	return rcv._tab.MutateFloat32Slot(10, n)
 }
 
-func (rcv *Ship) Armed() byte {
+func (rcv *Ship) Thrusting() byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
@@ -84,12 +84,24 @@ func (rcv *Ship) Armed() byte {
 	return 0
 }
 
-func (rcv *Ship) MutateArmed(n byte) bool {
+func (rcv *Ship) MutateThrusting(n byte) bool {
 	return rcv._tab.MutateByteSlot(12, n)
 }
 
-func (rcv *Ship) Health() int16 {
+func (rcv *Ship) Armed() byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Ship) MutateArmed(n byte) bool {
+	return rcv._tab.MutateByteSlot(14, n)
+}
+
+func (rcv *Ship) Health() int16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.GetInt16(o + rcv._tab.Pos)
 	}
@@ -97,11 +109,11 @@ func (rcv *Ship) Health() int16 {
 }
 
 func (rcv *Ship) MutateHealth(n int16) bool {
-	return rcv._tab.MutateInt16Slot(14, n)
+	return rcv._tab.MutateInt16Slot(16, n)
 }
 
 func (rcv *Ship) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -109,7 +121,7 @@ func (rcv *Ship) Name() []byte {
 }
 
 func ShipStart(builder *flatbuffers.Builder) {
-	builder.StartObject(7)
+	builder.StartObject(8)
 }
 func ShipAddPosition(builder *flatbuffers.Builder, position flatbuffers.UOffsetT) {
 	builder.PrependStructSlot(0, flatbuffers.UOffsetT(position), 0)
@@ -120,17 +132,20 @@ func ShipAddVelocity(builder *flatbuffers.Builder, velocity flatbuffers.UOffsetT
 func ShipAddAngle(builder *flatbuffers.Builder, angle float32) {
 	builder.PrependFloat32Slot(2, angle, 0.0)
 }
+func ShipAddAngularVelocity(builder *flatbuffers.Builder, angularVelocity float32) {
+	builder.PrependFloat32Slot(3, angularVelocity, 0.0)
+}
 func ShipAddThrusting(builder *flatbuffers.Builder, thrusting byte) {
-	builder.PrependByteSlot(3, thrusting, 0)
+	builder.PrependByteSlot(4, thrusting, 0)
 }
 func ShipAddArmed(builder *flatbuffers.Builder, armed byte) {
-	builder.PrependByteSlot(4, armed, 0)
+	builder.PrependByteSlot(5, armed, 0)
 }
 func ShipAddHealth(builder *flatbuffers.Builder, health int16) {
-	builder.PrependInt16Slot(5, health, 0)
+	builder.PrependInt16Slot(6, health, 0)
 }
 func ShipAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(name), 0)
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(name), 0)
 }
 func ShipEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

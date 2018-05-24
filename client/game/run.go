@@ -3,17 +3,18 @@ package game
 import (
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/faiface/pixel"
-	"github.com/20zinnm/spac/common/net"
-	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/20zinnm/spac/common/net/builders"
 	"os/signal"
 	"os"
 	"context"
 	"time"
 	"fmt"
+	"github.com/faiface/pixel/text"
+	"golang.org/x/image/font/basicfont"
 )
 
 var CtxWindowKey = "window"
+
+var atlas = text.NewAtlas(basicfont.Face7x13, text.ASCII)
 
 func Run(host string) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -32,7 +33,7 @@ func Run(host string) {
 	}
 
 	ctx = context.WithValue(ctx, CtxWindowKey, win)
-	CurrentScene = NewConnecting(ctx, host)
+	CurrentScene = newConnecting(win, host)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -54,20 +55,4 @@ func Run(host string) {
 			win.Update()
 		}
 	}
-}
-
-func boolToByte(val bool) byte {
-	if val {
-		return 1
-	}
-	return 0
-}
-
-func sendSpawn(conn net.Connection, name string) {
-	b := builders.Get()
-	defer builders.Put(b)
-	nameOff := b.CreateString(name)
-	upstream.SpawnStart(b)
-	upstream.SpawnAddName(b, nameOff)
-	conn.Write(net.MessageUp(b, upstream.PacketSpawn, upstream.SpawnEnd(b)))
 }

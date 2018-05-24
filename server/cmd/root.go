@@ -39,9 +39,11 @@ import (
 	"github.com/20zinnm/spac/common/net"
 	commonPhysics "github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/server/physics"
+	"github.com/pkg/profile"
 )
 
 var cfgFile string
+var prof bool
 var (
 	worldRadius float64 = 10000
 	addr                = ":8080"
@@ -59,6 +61,9 @@ var rootCmd = &cobra.Command{
 	Short: "Run a spac server",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		if prof {
+			defer profile.Start(profile.ProfilePath("."), profile.TraceProfile).Stop()
+		}
 		var manager entity.Manager
 		world := &commonPhysics.World{Space: commonPhysics.NewSpace()}
 		manager.AddSystem(health.New(world)) // every 50 ms
@@ -77,6 +82,8 @@ var rootCmd = &cobra.Command{
 				start = t
 				manager.Update(delta)
 			}
+			fmt.Println("game stopped")
+
 		}()
 		fmt.Println("game started")
 		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +93,6 @@ var rootCmd = &cobra.Command{
 				return
 			}
 			netwk.Add(net.Websocket(conn))
-			fmt.Println("client connected")
 		}))
 		log.Fatal(http.ListenAndServe(addr, nil))
 	},
@@ -104,6 +110,7 @@ func init() {
 	rootCmd.Flags().StringVar(&addr, "addr", ":8080", "Accept incoming requests at this address.")
 	rootCmd.Flags().Float64Var(&worldRadius, "radius", 10000, "Radius of the game world.")
 	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Millisecond*20, "Duration of a game tick")
+	rootCmd.Flags().BoolVar(&prof, "profile", false, "Enable performance profiling.")
 }
 
 func initConfig() {

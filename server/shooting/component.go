@@ -1,21 +1,19 @@
 package shooting
 
-import "time"
-
 type Component struct {
-	Cooldown time.Duration
-	LastShot time.Time
-	BulletVelocity float64
+	Cooldown uint
+	// ticks to armed
+	tta            uint
+	BulletForce    float64
+	BulletLifetime uint
 }
 
 func (c Component) Armed() bool {
-	return c.LastShot.Add(c.Cooldown).Nanosecond() < time.Now().Nanosecond()
+	return c.tta == 0
 }
 
 type Controls struct {
 	Shooting bool
 }
 
-type Controller interface {
-	Controls() Controls
-}
+type Controller chan Controls

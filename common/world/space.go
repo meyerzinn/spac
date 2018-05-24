@@ -6,7 +6,7 @@ import "github.com/jakecoffman/cp"
 func NewSpace() *cp.Space {
 	space := cp.NewSpace()
 	// rules:
-	space.SetDamping(.4) // deceleration
+	space.SetDamping(.35) // deceleration
 	space.SetGravity(cp.Vector{0, 0}) // no gravity
 	return space
 }
