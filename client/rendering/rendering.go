@@ -9,7 +9,6 @@ import (
 	"math"
 	"golang.org/x/image/colornames"
 	"github.com/20zinnm/spac/common/world"
-	"fmt"
 )
 
 type System struct {
@@ -47,19 +46,17 @@ func (s *System) Track(trackable Trackable) {
 	s.stateMu.Lock()
 	s.tracking = trackable
 	s.stateMu.Unlock()
-	fmt.Println("rendering: tracking")
 }
 
 func (s *System) Update(delta float64) {
+	s.world.Lock()
+	defer s.world.Unlock()
 	s.stateMu.Lock()
-	s.world.RLock()
-	defer s.world.RUnlock()
 	defer s.stateMu.Unlock()
 
 	var targetPosn pixel.Vec
 	if s.tracking != nil {
 		targetPosn = s.tracking.Position()
-		//fmt.Println(targetPosn)
 	}
 	inputs := Inputs{
 		Left:   s.win.Pressed(pixelgl.KeyA),

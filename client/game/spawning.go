@@ -23,7 +23,7 @@ func newSpawning(win *pixelgl.Window, conn net.Connection, name string) *Spawnin
 		next: make(chan Scene),
 	}
 	go func() {
-		sendSpawn(conn, name)
+		go sendSpawn(conn, name)
 		for {
 			message, err := readMessage(conn)
 			if err != nil {
@@ -32,6 +32,9 @@ func newSpawning(win *pixelgl.Window, conn net.Connection, name string) *Spawnin
 			packetTable := new(flatbuffers.Table)
 			if !message.Packet(packetTable) {
 				log.Fatalln("failed to decode packet")
+			}
+			if message.PacketType() != downstream.PacketSpawn {
+				fmt.Println("received packet other than spawn", message.PacketType(),downstream.PacketSpawn)
 			}
 			spawn := new(downstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)

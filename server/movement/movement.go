@@ -5,6 +5,8 @@ import (
 	"github.com/20zinnm/entity"
 	"sync"
 	"github.com/jakecoffman/cp"
+	"io"
+	"fmt"
 )
 
 type Controller chan Controls
@@ -71,4 +73,15 @@ func (s *System) Add(id entity.ID, controller Controller, physics world.Componen
 		angular: angularVelocity,
 	}
 	s.entitiesMu.Unlock()
+}
+
+func (s *System) Debug(w io.Writer) {
+	s.entitiesMu.Lock()
+	defer s.entitiesMu.Unlock()
+	fmt.Fprintln(w, "movement system")
+	fmt.Fprintf(w, "count=%d\n", len(s.entities))
+	fmt.Fprintln(w, "entities=")
+	for id, e := range s.entities {
+		fmt.Fprintf(w, "> id=%d component=%v\n", id, *e)
+	}
 }

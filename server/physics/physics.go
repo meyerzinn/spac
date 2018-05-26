@@ -4,33 +4,23 @@ import (
 	"github.com/20zinnm/entity"
 	"sync"
 	"github.com/jakecoffman/cp"
-	 "github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/common/world"
 )
-
-type Handler interface {
-	Remove(entity.ID)
-}
-
-type HandlerFunc func(entity.ID)
-
-func (fn HandlerFunc) Remove(entity entity.ID) {
-	fn(entity)
-}
 
 type System struct {
 	world      *world.World
 	radius     float64
-	handler    Handler
+	manager    *entity.Manager
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]world.Component
 }
 
-func New(handler Handler, w *world.World, radius float64) *System {
+func New(manager *entity.Manager, w *world.World, radius float64) *System {
 	return &System{
 		world:    w,
 		radius:   radius,
 		entities: make(map[entity.ID]world.Component),
-		handler:  handler,
+		manager:  manager,
 	}
 }
 
@@ -42,7 +32,7 @@ func (s *System) Update(delta float64) {
 	s.entitiesMu.RLock()
 	for id, component := range s.entities {
 		if !component.Position().Near(cp.Vector{}, s.radius) {
-			s.handler.Remove(id)
+			go s.manager.Remove(id)
 		}
 	}
 	s.entitiesMu.RUnlock()

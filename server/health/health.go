@@ -6,6 +6,8 @@ import (
 	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/server/physics/collision"
+	"io"
+	"fmt"
 )
 
 type System struct {
@@ -53,7 +55,7 @@ func (s *System) Update(delta float64) {
 	defer s.entitiesMu.RUnlock()
 	for id, d := range s.entities {
 		if *d <= 0 {
-			s.manager.Remove(id)
+			go s.manager.Remove(id)
 		}
 	}
 }
@@ -62,4 +64,15 @@ func (s *System) Remove(entity entity.ID) {
 	s.entitiesMu.Lock()
 	delete(s.entities, entity)
 	s.entitiesMu.Unlock()
+}
+
+func (s *System) Debug(w io.Writer) {
+	fmt.Fprintln(w, "health system")
+	s.entitiesMu.RLock()
+	defer s.entitiesMu.RUnlock()
+	fmt.Fprintf(w, "count=%d\n", len(s.entities))
+	fmt.Fprintln(w, "entities=")
+	for id, component := range s.entities {
+		fmt.Fprintf(w, "> id=%d health=%d\n", id, *component)
+	}
 }

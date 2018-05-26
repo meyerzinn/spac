@@ -40,10 +40,13 @@ import (
 	commonPhysics "github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/server/physics"
 	"github.com/pkg/profile"
+	"io"
+	"github.com/20zinnm/spac/server/despawning"
 )
 
 var cfgFile string
 var prof bool
+var debug bool
 var (
 	worldRadius float64 = 10000
 	addr                = ":8080"
@@ -71,6 +74,7 @@ var rootCmd = &cobra.Command{
 		manager.AddSystem(shooting.New(&manager, world))
 		manager.AddSystem(physics.New(&manager, world, worldRadius))
 		manager.AddSystem(perceiving.New(world))
+		manager.AddSystem(despawning.New(&manager))
 		netwk := networking.New(&manager, world, worldRadius)
 		manager.AddSystem(netwk)
 		go func() {
@@ -86,7 +90,7 @@ var rootCmd = &cobra.Command{
 
 		}()
 		fmt.Println("game started")
-		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			conn, err := upgrader.Upgrade(w, r, nil)
 			if err != nil {
 				fmt.Println("error upgrading connection", err)
@@ -94,8 +98,24 @@ var rootCmd = &cobra.Command{
 			}
 			netwk.Add(net.Websocket(conn))
 		}))
+		if debug {
+			http.Handle("/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintln(w, "debugging")
+				fmt.Fprintln(w, "=========")
+				for _, system := range manager.Systems() {
+					if debuggable, ok := system.(Debuggable); ok {
+						debuggable.Debug(w)
+						fmt.Fprintf(w, "---\n")
+					}
+				}
+			}))
+		}
 		log.Fatal(http.ListenAndServe(addr, nil))
 	},
+}
+
+type Debuggable interface {
+	Debug(to io.Writer)
 }
 
 func Execute() {
@@ -111,6 +131,7 @@ func init() {
 	rootCmd.Flags().Float64Var(&worldRadius, "radius", 10000, "Radius of the game world.")
 	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Millisecond*20, "Duration of a game tick")
 	rootCmd.Flags().BoolVar(&prof, "profile", false, "Enable performance profiling.")
+	rootCmd.Flags().BoolVar(&debug, "debug", false, "Enable debugging endpoint.")
 }
 
 func initConfig() {

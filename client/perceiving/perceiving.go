@@ -8,21 +8,12 @@ import (
 	"github.com/20zinnm/spac/client/rendering"
 	"github.com/20zinnm/spac/client/physics"
 	"time"
-	"github.com/20zinnm/spac/client/entities/ship"
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/client/entities/bullet"
-	"github.com/faiface/pixel"
 	"fmt"
 )
 
-type Updater interface {
+type Updateable interface {
 	Update(bytes []byte, pos flatbuffers.UOffsetT)
-}
-
-type UpdaterFunc func([]byte, flatbuffers.UOffsetT)
-
-func (fn UpdaterFunc) Update(bytes []byte, pos flatbuffers.UOffsetT) {
-	fn(bytes, pos)
 }
 
 type System struct {
@@ -32,7 +23,7 @@ type System struct {
 	stateMu sync.RWMutex
 	self    entity.ID
 	//latency  *int64
-	entities map[entity.ID]Updater
+	entities map[entity.ID]Updateable
 	last     time.Time // ns since last update
 }
 
@@ -42,7 +33,7 @@ func New(manager *entity.Manager, world *world.World, self entity.ID, /* latency
 		world:   world,
 		self:    self,
 		//latency:  latency,
-		entities: make(map[entity.ID]Updater),
+		entities: make(map[entity.ID]Updateable),
 	}
 }
 
@@ -50,9 +41,9 @@ func (s *System) Update(delta float64) {
 }
 
 func (s *System) Perceive(perception *downstream.Perception) {
-	s.stateMu.Lock()
 	s.world.Lock()
 	defer s.world.Unlock()
+	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
 	//now := time.Now()
@@ -76,38 +67,45 @@ func (s *System) Perceive(perception *downstream.Perception) {
 			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
 		} else {
 			id := e.Id()
-			var updater Updater
+			var updater Updateable
 			switch e.SnapshotType() {
-			case downstream.SnapshotShip:
-				physicsC := ship.Physics(s.world.Space, id)
-				var armed, thrusting bool
+			case downstream.SnapshotBullet:
+				bullet := NewBullet(s.world.Space, id)
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
 					case *physics.System:
-						sys.Add(id, physicsC)
+						sys.Add(id, bullet.Physics)
 					case *rendering.System:
 						//var lastPosn pixel.Vec
-						sys.Add(id, ship.Renderable(physicsC, &thrusting, &armed))
+						sys.Add(id, bullet)
+					}
+				}
+				updater = bullet
+			case downstream.SnapshotShip:
+				ship := NewShip(s.world.Space, id)
+				for _, system := range s.manager.Systems() {
+					switch sys := system.(type) {
+					case *physics.System:
+						sys.Add(id, ship.Physics)
+					case *rendering.System:
+						sys.Add(id, ship)
 						if id == s.self {
-							sys.Track(rendering.TrackableFunc(func() pixel.Vec {
-								return pixel.Vec(physicsC.Position())
-							}))
+							sys.Track(ship)
 						}
 					}
 				}
-				updater = UpdaterFunc(ship.Updater(physicsC, &thrusting, &armed))
-			case downstream.SnapshotBullet:
-				id := e.Id()
-				physicsC := bullet.Physics(s.world.Space)
-				for _, system := range s.manager.Systems() {
-					switch sys := system.(type) {
-					case *physics.System:
-						sys.Add(id, physicsC)
-					case *rendering.System:
-						sys.Add(id, bullet.Renderable(physicsC))
-					}
-				}
-				updater = UpdaterFunc(bullet.Updater(physicsC))
+				updater = ship
+				//id := e.Id()
+				//physicsC := bullet.Physics(s.world.Space)
+				//for _, system := range s.manager.Systems() {
+				//	switch sys := system.(type) {
+				//	case *physics.System:
+				//		sys.Add(id, physicsC)
+				//	case *rendering.System:
+				//		sys.Add(id, bullet.Renderable(physicsC))
+				//	}
+				//}
+				//updater = UpdaterFunc(bullet.Updateable(physicsC))
 			}
 			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
 			s.entities[id] = updater
@@ -115,7 +113,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 	}
 	for id := range s.entities {
 		if _, ok := known[id]; !ok {
-			s.manager.Remove(id)
+			go s.manager.Remove(id)
 		}
 	}
 }

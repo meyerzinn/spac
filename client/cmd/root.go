@@ -47,6 +47,7 @@ var rootCmd = &cobra.Command{
 		if prof {
 			defer profile.Start(profile.ProfilePath("."), profile.TraceProfile).Stop()
 		}
+
 		pixelgl.Run(func() { game.Run(host) })
 	},
 }

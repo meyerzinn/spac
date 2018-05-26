@@ -8,6 +8,7 @@ import (
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/server/physics"
 	"github.com/20zinnm/spac/server/entities/bullet"
+	"github.com/20zinnm/spac/server/health"
 )
 
 type shootingEntity struct {
@@ -58,6 +59,8 @@ func (s *System) Update(delta float64) {
 			s.world.Unlock()
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
+				case *health.System:
+
 				case *physics.System:
 					sys.Add(id, physicsC)
 				case *despawning.System:

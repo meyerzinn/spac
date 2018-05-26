@@ -25,7 +25,7 @@ func (s *ConnectingScene) Update(dt float64) {
 }
 
 func newConnecting(win *pixelgl.Window, host string) *ConnectingScene {
-	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
+	u := url.URL{Scheme: "ws", Host: host, Path: "/ws"}
 	log.Printf("connecting to %s", u.String())
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {

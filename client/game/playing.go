@@ -11,7 +11,6 @@ import (
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/google/flatbuffers/go"
-	"log"
 	"os"
 	"fmt"
 	"time"
@@ -25,7 +24,6 @@ type PlayingScene struct {
 	manager    *entity.Manager
 	perceiving *perceiving.System
 	next       chan Scene
-	done       chan struct{}
 	//latency should only be modified atomically; it represents the nanosecond latency for a roundtrip packet
 	//latency int64
 	// lastPerception represents the time the lastPerception perception was received; it should only be modified atomically
@@ -37,7 +35,6 @@ func (s *PlayingScene) Update(dt float64) {
 	case next := <-s.next:
 		fmt.Println("next scene (old:playing)")
 		CurrentScene = next
-		close(s.done)
 	default:
 		lastPerception := atomic.LoadInt64(&s.lastPerception)
 		//latency := atomic.LoadInt64(&s.latency)
@@ -55,11 +52,12 @@ func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 	defer pinger.Stop()
 	for {
 		select {
-		case <-s.done:
-			return
 		case <-pinger.C:
 			sendPing(s.conn, time.Now().UnixNano())
-		case i := <-queue:
+		case i, ok := <-queue:
+			if !ok {
+				return
+			}
 			if i != last {
 				sendControls(s.conn, i)
 				fmt.Println("sending controls")
@@ -73,7 +71,7 @@ func (s *PlayingScene) reader() {
 	for {
 		data, err := s.conn.Read()
 		if err != nil {
-			log.Println("disconnected")
+			fmt.Println("disconnected")
 			os.Exit(0)
 			// todo just go back to connecting and try again instead of exiting
 			return
@@ -81,7 +79,7 @@ func (s *PlayingScene) reader() {
 		message := downstream.GetRootAsMessage(data, 0)
 		packetTable := new(flatbuffers.Table)
 		if !message.Packet(packetTable) {
-			log.Println("error decoding message; skipping")
+			fmt.Println("error decoding message; skipping")
 		}
 		switch message.PacketType() {
 		case downstream.PacketPong:
@@ -107,7 +105,6 @@ func newPlaying(win *pixelgl.Window, conn net.Connection, self entity.ID) *Playi
 		conn:    conn,
 		manager: manager,
 		next:    make(chan Scene),
-		done:    make(chan struct{}),
 	}
 	w := &world.World{Space: world.NewSpace()}
 	scene.perceiving = perceiving.New(manager, w, self)

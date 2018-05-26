@@ -8,7 +8,6 @@ import (
 
 type System struct {
 	world      *world.World
-	radius     float64
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]world.Component
 }
@@ -23,6 +22,8 @@ func New(w *world.World) *System {
 func (s *System) Update(delta float64) {
 	s.world.Lock()
 	defer s.world.Unlock()
+	s.entitiesMu.RLock()
+	defer s.entitiesMu.RUnlock()
 	s.world.Space.Step(delta)
 }
 

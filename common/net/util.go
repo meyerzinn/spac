@@ -6,13 +6,15 @@ import (
 	"github.com/20zinnm/spac/common/net/upstream"
 )
 
-func MessageDown(builder *flatbuffers.Builder, packetType byte, packet flatbuffers.UOffsetT ) []byte {
+func MessageDown(builder *flatbuffers.Builder, packetType byte, packet flatbuffers.UOffsetT) []byte {
 	downstream.MessageStart(builder)
 	downstream.MessageAddPacket(builder, packet)
 	downstream.MessageAddPacketType(builder, packetType)
 	m := downstream.MessageEnd(builder)
 	builder.Finish(m)
-	return builder.FinishedBytes()
+	data := make([]byte, len(builder.FinishedBytes()))
+	copy(data, builder.FinishedBytes())
+	return data
 }
 
 func MessageUp(builder *flatbuffers.Builder, packetType byte, packet flatbuffers.UOffsetT) []byte {
@@ -21,5 +23,7 @@ func MessageUp(builder *flatbuffers.Builder, packetType byte, packet flatbuffers
 	upstream.MessageAddPacketType(builder, packetType)
 	m := upstream.MessageEnd(builder)
 	builder.Finish(m)
-	return builder.FinishedBytes()
+	data := make([]byte, len(builder.FinishedBytes()))
+	copy(data, builder.FinishedBytes())
+	return data
 }

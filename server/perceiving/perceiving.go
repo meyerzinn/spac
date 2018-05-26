@@ -10,6 +10,8 @@ import (
 	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/server/physics/collision"
 	"github.com/20zinnm/spac/common/net"
+	"io"
+	"fmt"
 )
 
 type Perceiver interface {
@@ -33,11 +35,10 @@ type perceivingEntity struct {
 }
 
 type System struct {
-	world          *world.World
-	perceiversMu   sync.RWMutex
-	perceivers     map[entity.ID]perceivingEntity
-	perceivablesMu sync.RWMutex
-	perceivables   map[entity.ID]Perceivable
+	world        *world.World
+	stateMu      sync.RWMutex
+	perceivers   map[entity.ID]perceivingEntity
+	perceivables map[entity.ID]Perceivable
 }
 
 func New(world *world.World) *System {
@@ -49,20 +50,20 @@ func New(world *world.World) *System {
 }
 
 func (s *System) AddPerceiver(id entity.ID, perceiver Perceiver) {
-	s.perceiversMu.Lock()
+	s.stateMu.Lock()
 	s.perceivers[id] = perceivingEntity{Perceiver: perceiver, known: make(map[entity.ID]struct{})}
-	s.perceiversMu.Unlock()
+	s.stateMu.Unlock()
 }
 
 func (s *System) AddPerceivable(id entity.ID, perceivable Perceivable) {
-	s.perceivablesMu.Lock()
+	s.stateMu.Lock()
 	s.perceivables[id] = perceivable
-	s.perceivablesMu.Unlock()
+	s.stateMu.Unlock()
 }
 
 func (s *System) Update(_ float64) {
-	s.perceiversMu.RLock()
-	defer s.perceiversMu.RUnlock()
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
 	var wg sync.WaitGroup
 	for id, perceiver := range s.perceivers {
 		wg.Add(1)
@@ -89,7 +90,6 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 		Perceivable
 		entity.ID
 	}, 0, len(nearby)+1)
-	s.perceivablesMu.RLock()
 	// include self
 	if _, ok := s.perceivables[id]; ok {
 		nearby[id] = struct{}{}
@@ -105,7 +105,6 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 			})
 		}
 	}
-	s.perceivablesMu.RUnlock()
 	var entities []flatbuffers.UOffsetT
 	s.world.RLock()
 	for _, perceivable := range perceivables {
@@ -123,14 +122,21 @@ func (s *System) perceive(id entity.ID, perceiver perceivingEntity, wg *sync.Wai
 	entitiesVec := b.EndVector(len(entities))
 	downstream.PerceptionStart(b)
 	downstream.PerceptionAddEntities(b, entitiesVec)
-	perception := net.MessageDown(b, downstream.PacketPerception, downstream.PerceptionEnd(b))
 	//fmt.Println(perception)
-	go perceiver.Perceive(perception)
+	go perceiver.Perceive(net.MessageDown(b, downstream.PacketPerception, downstream.PerceptionEnd(b)))
+}
+
+func (s *System) Debug(w io.Writer) {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	fmt.Fprintln(w, "perceiving system")
+	fmt.Fprintf(w, "perceiversCount=%d\n", len(s.perceivers))
+	fmt.Fprintf(w, "perceivablesCount=%d\n", len(s.perceivables))
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.perceiversMu.Lock()
+	s.stateMu.Lock()
 	delete(s.perceivers, entity)
 	delete(s.perceivables, entity)
-	s.perceiversMu.Unlock()
+	s.stateMu.Unlock()
 }
