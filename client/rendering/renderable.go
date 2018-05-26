@@ -1,13 +1,10 @@
 package rendering
 
-import "github.com/faiface/pixel/imdraw"
+import (
+	"github.com/faiface/pixel/imdraw"
+	"github.com/faiface/pixel/pixelgl"
+)
 
 type Renderable interface {
-	Draw(imd *imdraw.IMDraw)
-}
-
-type RenderableFunc func(imd *imdraw.IMDraw)
-
-func (fn RenderableFunc) Draw(imd *imdraw.IMDraw) {
-	fn(imd)
+	Draw(canvas *pixelgl.Canvas, imd *imdraw.IMDraw)
 }

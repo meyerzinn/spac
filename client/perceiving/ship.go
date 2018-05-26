@@ -10,10 +10,19 @@ import (
 	"sync"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/google/flatbuffers/go"
+	"github.com/faiface/pixel/text"
+	"github.com/20zinnm/spac/client/fonts"
+	"github.com/faiface/pixel/pixelgl"
+	"math"
 )
 
 var (
-	shipVertices = []cp.Vector{{-24, -20}, {24, -20}, {0, 40},}
+	shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
+	textPool     = &sync.Pool{
+		New: func() interface{} {
+			return text.New(pixel.ZV, fonts.Atlas)
+		},
+	}
 )
 
 type Ship struct {
@@ -21,6 +30,7 @@ type Ship struct {
 	Physics   world.Component
 	Thrusting bool
 	Armed     bool
+	Name      string
 	sync.RWMutex
 }
 
@@ -43,6 +53,9 @@ func (s *Ship) Update(bytes []byte, pos flatbuffers.UOffsetT) {
 	vel := shipUpdate.Velocity(new(downstream.Vector))
 	s.Lock()
 	defer s.Unlock()
+	if shipUpdate.Name() != nil {
+		s.Name = string(shipUpdate.Name())
+	}
 	s.Physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
 	s.Physics.SetVelocity(float64(vel.X()), float64(vel.Y()))
 	s.Physics.SetAngle(float64(shipUpdate.Angle()))
@@ -56,40 +69,45 @@ func (s *Ship) Position() pixel.Vec {
 	return pixel.Vec(s.Physics.Position())
 }
 
-func (s *Ship) Draw(imd *imdraw.IMDraw) {
+var (
+	shipThrusterVertices = []pixel.Vec{{-8, -9}, {8, -9}, {0, -40}}
+	shipArmedVertex      = pixel.Vec{0, 8}
+)
+
+func calcLabelY(theta float64) float64 {
+	return -12.7096*math.Sin(-2*(theta + 3.75912)) + 44
+}
+
+func (s *Ship) Draw(canvas *pixelgl.Canvas, imd *imdraw.IMDraw) {
 	s.RLock()
 	defer s.RUnlock()
-
+	a := s.Physics.Angle()
+	p := pixel.Vec(s.Physics.Position())
+	// draw thruster
+	if s.Thrusting {
+		imd.Color = color.RGBA{
+			R: 248,
+			G: 196,
+			B: 69,
+			A: 255,
+		}
+		for _, v := range shipThrusterVertices {
+			imd.Push(v.Rotated(a).Add(p))
+		}
+		imd.Polygon(0)
+	}
+	// draw body
 	imd.Color = color.RGBA{
 		R: 242,
 		G: 75,
 		B: 105,
 		A: 255,
 	}
-	a := s.Physics.Angle()
-	//p := pixel.Lerp(pixel.Vec(shipPhysics.Position()), lastPosn, 1-math.Pow(1/128, delta))
-	//lastPosn = pixel.Vec(shipPhysics.Position())
-	p := pixel.Vec(s.Physics.Position())
-	imd.Push(
-		pixel.Vec{-24, -20}.Rotated(a).Add(p),
-		pixel.Vec{24, -20}.Rotated(a).Add(p),
-		pixel.Vec{0, 40}.Rotated(a).Add(p),
-	)
-	imd.Polygon(0)
-	if s.Thrusting {
-		imd.Color = color.RGBA{
-			R: 235,
-			G: 200,
-			B: 82,
-			A: 255,
-		}
-		imd.Push(
-			pixel.Vec{-8, -20}.Rotated(a).Add(p),
-			pixel.Vec{8, -20}.Rotated(a).Add(p),
-			pixel.Vec{0, -40}.Rotated(a).Add(p),
-		)
-		imd.Polygon(0)
+	for _, v := range shipVertices {
+		imd.Push(pixel.Vec(v).Rotated(a).Add(p))
 	}
+	imd.Polygon(0)
+	// draw bullet
 	if s.Armed {
 		imd.Color = color.RGBA{
 			R: 74,
@@ -97,7 +115,17 @@ func (s *Ship) Draw(imd *imdraw.IMDraw) {
 			B: 212,
 			A: 255,
 		}
-		imd.Push(p)
+		imd.Push(shipArmedVertex.Rotated(a).Add(p))
 		imd.Circle(8, 0)
+	}
+	// draw name
+	if s.Name != "" {
+		txt := textPool.Get().(*text.Text)
+		defer textPool.Put(txt)
+		txt.Clear()
+		txt.Write([]byte(s.Name))
+		txt.Draw(canvas, pixel.IM.Moved(p.Sub(pixel.Vec{txt.Bounds().W() / 2, -calcLabelY(s.Physics.Angle())})))
+		txt.Clear()
+		//fmt.Println(s.Physics.Angle(), calcLabelY(s.Physics.Angle()))
 	}
 }

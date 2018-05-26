@@ -20,7 +20,7 @@ const (
 	AngularVelocity float64 = 1
 )
 
-var shipVertices = []cp.Vector{{-24, -20}, {24, -20}, {0, 40},}
+var shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
 
 type Controls struct {
 	Movement movement.Controls
@@ -40,9 +40,9 @@ type Entity struct {
 
 func New(w *world.World, id entity.ID, name string, conn net.Connection) *Entity {
 	w.Lock()
-	body := w.Space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))
+	body := w.Space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 4, shipVertices, cp.Vector{}, 0)))
 	body.UserData = id
-	shipShape := w.Space.AddShape(cp.NewPolyShape(body, 3, shipVertices, cp.NewTransformIdentity(), 0))
+	shipShape := w.Space.AddShape(cp.NewPolyShape(body, 4, shipVertices, cp.NewTransformIdentity(), 0))
 	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Health|collision.Perceiving), cp.ALL_CATEGORIES))
 	physics := world.Component{Body: body}
 	w.Unlock()
@@ -56,7 +56,7 @@ func New(w *world.World, id entity.ID, name string, conn net.Connection) *Entity
 		Health:  &health,
 		Shooting: &shooting.Component{
 			Cooldown:       20,
-			BulletForce:    500,
+			BulletForce:    1000,
 			BulletLifetime: 100,
 		},
 	}

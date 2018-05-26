@@ -5,21 +5,11 @@ import (
 	"github.com/faiface/pixel"
 	"os/signal"
 	"os"
-	"context"
 	"time"
 	"fmt"
-	"github.com/faiface/pixel/text"
-	"golang.org/x/image/font/basicfont"
 )
 
-var CtxWindowKey = "window"
-
-var atlas = text.NewAtlas(basicfont.Face7x13, text.ASCII)
-
 func Run(host string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// open window
 	cfg := pixelgl.WindowConfig{
 		Title:     "spac",
@@ -31,10 +21,7 @@ func Run(host string) {
 	if err != nil {
 		panic(err)
 	}
-
-	ctx = context.WithValue(ctx, CtxWindowKey, win)
 	CurrentScene = newConnecting(win, host)
-
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 

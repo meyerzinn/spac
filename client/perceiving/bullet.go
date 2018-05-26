@@ -10,6 +10,7 @@ import (
 	"sync"
 	"github.com/google/flatbuffers/go"
 	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/faiface/pixel/pixelgl"
 )
 
 type Bullet struct {
@@ -27,7 +28,7 @@ func NewBullet(space *cp.Space, id entity.ID) *Bullet {
 	}
 }
 
-func (b *Bullet) Draw(imd *imdraw.IMDraw) {
+func (b *Bullet) Draw(_ *pixelgl.Canvas, imd *imdraw.IMDraw) {
 	b.RLock()
 	defer b.RUnlock()
 	imd.Color = color.RGBA{

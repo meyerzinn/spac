@@ -9,14 +9,14 @@ import (
 	"math"
 	"golang.org/x/image/colornames"
 	"github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/client/stars"
 )
 
 type System struct {
 	win     *pixelgl.Window
 	world   *world.World
 	handler InputHandler
-	// stateMu guards entities, camPos, tracking, canvas, and imd
-	// It should be read-locked only for operations that do not modify any underlying state for any guarded variables, such as counting entities.
+	// stateMu guards entities, camPos, tracking, canvas, and imd. It should be read-locked only for operations that do not modify any underlying state for any guarded variables, such as counting entities.
 	stateMu  sync.RWMutex
 	entities map[entity.ID]Renderable
 	camPos   pixel.Vec
@@ -75,12 +75,14 @@ func (s *System) Update(delta float64) {
 	s.imd.Clear()
 
 	s.imd.Color = colornames.Darkgray
-	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 3)
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 4)
+	s.imd.Color = colornames.Gray
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 2)
 	s.imd.Color = colornames.White
-	drawStars(s.imd, s.camPos, s.canvas.Bounds(), 1)
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 1)
 
 	for _, entity := range s.entities {
-		entity.Draw(s.imd)
+		entity.Draw(s.canvas, s.imd)
 	}
 	s.imd.Draw(s.canvas)
 	s.win.Clear(colornames.White)

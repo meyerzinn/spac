@@ -12,7 +12,7 @@ func Physics(space *cp.Space, id entity.ID, owner entity.ID, ownerPhysics world.
 	body.UserData = id
 	bulletShape := space.AddShape(cp.NewCircle(body, 8, cp.Vector{}))
 	bulletShape.SetFilter(cp.NewShapeFilter(uint(owner), uint(collision.Health|collision.Perceiving), cp.ALL_CATEGORIES))
-	body.SetPosition(ownerPhysics.Position())
+	body.SetPosition(ownerPhysics.Position().Add(cp.Vector{0, 8}))
 	body.SetAngle(ownerPhysics.Angle())
 	body.ApplyImpulseAtLocalPoint(cp.Vector{0, force}, cp.Vector{})
 	//body.SetVelocityVector(body.Rotation().Rotate(cp.Vector{0, velocity}))
