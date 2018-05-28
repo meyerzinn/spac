@@ -4,7 +4,7 @@ import (
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/downstream"
-	"github.com/20zinnm/spac/server/damaging"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/physics/collision"
 	"github.com/20zinnm/spac/server/shooting"
@@ -31,7 +31,7 @@ type Entity struct {
 	Name     string
 	Controls Controls
 	Physics  *cp.Body
-	Health   *damaging.Component
+	Health   *health.Component
 	Shooting *shooting.Component
 	//sync.RWMutex // No need for mutex because there is no condition where an entity is updated and serialized simultaneously.
 }
@@ -46,7 +46,7 @@ func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entit
 		Name:    name,
 		Physics: body,
 		Conn:    conn,
-		Health: &damaging.Component{
+		Health: &health.Component{
 			Value: 100,
 			Max:   100,
 		},

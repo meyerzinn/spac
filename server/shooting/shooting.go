@@ -2,7 +2,7 @@ package shooting
 
 import (
 	"github.com/20zinnm/entity"
-	"github.com/20zinnm/spac/server/damaging"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/despawning"
 	"github.com/20zinnm/spac/server/entities/bullet"
 	"github.com/20zinnm/spac/server/perceiving"
@@ -57,7 +57,7 @@ func (s *System) Update(delta float64) {
 			physicsC := bullet.Physics(s.space, id, owner, e.physics, e.BulletForce)
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
-				case *damaging.System:
+				case *health.System:
 				case *physics.System:
 					sys.Add(id, physicsC)
 				case *despawning.System:

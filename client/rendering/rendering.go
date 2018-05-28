@@ -10,6 +10,7 @@ import (
 	"golang.org/x/image/colornames"
 	"image/color"
 	"math"
+	"fmt"
 )
 
 type System struct {
@@ -42,12 +43,18 @@ func (s *System) Track(trackable Trackable) {
 	s.tracking = trackable
 }
 
+var lastHealth int
+
 func (s *System) Update(delta float64) {
 	var targetPosn pixel.Vec
 	var health int
 	if s.tracking != nil {
 		targetPosn = s.tracking.Position()
 		health = s.tracking.Health()
+		if health != lastHealth {
+			fmt.Println(health)
+			lastHealth = health
+		}
 	}
 	inputs := Inputs{
 		Left:   s.win.Pressed(pixelgl.KeyA),

@@ -9,15 +9,13 @@ import (
 
 type System struct {
 	space    *cp.Space
-	radius   float64
 	manager  *entity.Manager
 	entities map[entity.ID]*cp.Body
 }
 
-func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
+func New(manager *entity.Manager, space *cp.Space) *System {
 	return &System{
 		space:    space,
-		radius:   radius,
 		entities: make(map[entity.ID]*cp.Body),
 		manager:  manager,
 	}

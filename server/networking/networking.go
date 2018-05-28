@@ -7,7 +7,7 @@ import (
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/20zinnm/spac/server/damaging"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/entities/ship"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/perceiving"
@@ -16,6 +16,7 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/jakecoffman/cp"
 	"time"
+	"github.com/20zinnm/spac/server/bounding"
 )
 
 type Handler interface {
@@ -51,7 +52,7 @@ type System struct {
 	connections map[net.Connection]struct{}
 	entities    map[entity.ID]net.Connection
 	lookup      map[net.Connection]networkingEntity
-}
+ }
 
 func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
 	return &System{
@@ -200,8 +201,9 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 			sys.Add(id, movementQueue, entity.Physics, ship.LinearForce, ship.AngularVelocity)
 		case *shooting.System:
 			sys.Add(id, entity.Shooting, shootingQueue, entity.Physics)
-		case *damaging.System:
+		case *health.System:
 			sys.Add(id, entity.Health)
+		case *bounding.System:
 		}
 	}
 	// add entity to the networking index

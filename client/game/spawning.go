@@ -18,7 +18,8 @@ type SpawningScene struct {
 }
 
 func NewSpawning(win *pixelgl.Window, conn net.Connection, name string) *SpawningScene {
-	scene := &SpawningScene{win: win,
+	scene := &SpawningScene{
+		win: win,
 		conn: conn,
 		next: make(chan Scene),
 	}

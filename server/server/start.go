@@ -5,8 +5,6 @@ import (
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/world"
-	"github.com/20zinnm/spac/server/damaging"
-	"github.com/20zinnm/spac/server/despawning"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/networking"
 	"github.com/20zinnm/spac/server/perceiving"
@@ -17,6 +15,9 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"github.com/20zinnm/spac/server/bounding"
+	"github.com/20zinnm/spac/server/despawning"
+	"github.com/20zinnm/spac/server/health"
 )
 
 type server struct {
@@ -75,12 +76,14 @@ func Start(options ...Option) {
 	}
 	var manager = entity.NewManager()
 	space := world.NewSpace()
-	manager.AddSystem(damaging.New(manager, space))
+	manager.AddSystem(bounding.New(server.radius))
 	manager.AddSystem(movement.New())
 	manager.AddSystem(shooting.New(manager, space))
-	manager.AddSystem(physics.New(manager, space, server.radius))
+	manager.AddSystem(physics.New(manager, space))
 	manager.AddSystem(perceiving.New(space))
+	manager.AddSystem(health.New(manager, space))
 	manager.AddSystem(despawning.New(manager))
+
 	netwk := networking.New(manager, space, server.radius)
 	manager.AddSystem(netwk)
 	go func() {

@@ -14,21 +14,21 @@ const (
 )
 
 var (
-	imdMu = new(sync.Mutex)
-	imd   = imdraw.New(nil)
+	gimdMu = new(sync.Mutex)
+	gImd   = imdraw.New(nil)
 )
 
 func Static(win *pixelgl.Window) {
-	imdMu.Lock()
-	defer imdMu.Unlock()
-	imd.Clear()
-	imd.Color = colornames.Darkgray
-	Draw(imd, pixel.ZV, win.Bounds(), 4)
-	imd.Color = colornames.Gray
-	Draw(imd, pixel.ZV, win.Bounds(), 2)
-	imd.Color = colornames.White
-	Draw(imd, pixel.ZV, win.Bounds(), 1)
-	imd.Draw(win)
+	gimdMu.Lock()
+	defer gimdMu.Unlock()
+	gImd.Clear()
+	gImd.Color = colornames.Darkgray
+	Draw(gImd, pixel.ZV, win.Bounds(), 4)
+	gImd.Color = colornames.Gray
+	Draw(gImd, pixel.ZV, win.Bounds(), 2)
+	gImd.Color = colornames.White
+	Draw(gImd, pixel.ZV, win.Bounds(), 1)
+	gImd.Draw(win)
 }
 
 func Draw(imd *imdraw.IMDraw, cam pixel.Vec, bounds pixel.Rect, starscale int) {

@@ -1,5 +1,48 @@
 package bounding
 
+import (
+	"github.com/jakecoffman/cp"
+	"github.com/20zinnm/spac/server/health"
+	"github.com/20zinnm/entity"
+	"math"
+)
+
+type boundingEntity struct {
+	Physics *cp.Body
+	Health  *health.Component
+}
+
+type System struct {
+	radius   float64
+	entities map[entity.ID]boundingEntity
+}
+
+func New(radius float64) *System {
+	return &System{
+		radius: radius,
+	}
+}
+
+func (s *System) Add(id entity.ID, physics *cp.Body, health *health.Component) {
+	s.entities[id] = boundingEntity{Physics: physics, Health: health,}
+}
+
+func (s *System) Update(delta float64) {
+	for _, entity := range s.entities {
+		if !entity.Physics.Position().Near(cp.Vector{}, s.radius) {
+			entity.Health.Value -= damage(entity.Physics.Position().Length() - s.radius)
+		}
+	}
+}
+
+func damage(dist float64) float64 {
+	return math.Sqrt(dist) / 20
+}
+
+func (s *System) Remove(entity entity.ID) {
+	delete(s.entities, entity)
+}
+
 //
 //type boundingEntity struct {
 //	Physics world.Component

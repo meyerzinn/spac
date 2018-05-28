@@ -1,4 +1,4 @@
-package damaging
+package health
 
 import (
 	"fmt"
