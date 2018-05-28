@@ -36,7 +36,6 @@ type Ship struct {
 func NewShip(space *cp.Space, id entity.ID) *Ship {
 	body := space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))
 	space.AddShape(cp.NewPolyShape(body, 3, shipVertices, cp.NewTransformIdentity(), 0))
-
 	return &Ship{
 		ID:        id,
 		Physics:   body,

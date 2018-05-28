@@ -40,7 +40,7 @@ func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entit
 	body := space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 4, shipVertices, cp.Vector{}, 0)))
 	body.UserData = id
 	shipShape := space.AddShape(cp.NewPolyShape(body, 4, shipVertices, cp.NewTransformIdentity(), 0))
-	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Damageable|collision.Perceiving|collision.Perceivable), uint(collision.Damageable)))
+	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Damageable|collision.Perceivable), uint(collision.Damageable|collision.Perceiving)))
 	return &Entity{
 		ID:      id,
 		Name:    name,
