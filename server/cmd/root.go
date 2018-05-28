@@ -22,40 +22,22 @@ package cmd
 
 import (
 	"fmt"
-	"os"
+	"github.com/20zinnm/spac/server/server"
 	"github.com/mitchellh/go-homedir"
+	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"os"
 	"time"
-	"github.com/gorilla/websocket"
-	"net/http"
-	"github.com/20zinnm/entity"
-	"github.com/20zinnm/spac/server/movement"
-	"github.com/20zinnm/spac/server/perceiving"
-	"github.com/20zinnm/spac/server/networking"
-	"github.com/20zinnm/spac/server/health"
-	"github.com/20zinnm/spac/server/shooting"
-	"log"
-	"github.com/20zinnm/spac/common/net"
-	commonPhysics "github.com/20zinnm/spac/common/world"
-	"github.com/20zinnm/spac/server/physics"
-	"github.com/pkg/profile"
-	"io"
-	"github.com/20zinnm/spac/server/despawning"
 )
 
 var cfgFile string
 var prof bool
-var debug bool
 var (
-	worldRadius float64 = 10000
-	addr                = ":8080"
-	upgrader            = &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	tick time.Duration
+	debug       bool
+	worldRadius float64
+	addr        string
+	tick        time.Duration
 	//logger *zap.Logger
 )
 
@@ -65,57 +47,15 @@ var rootCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if prof {
-			defer profile.Start(profile.ProfilePath("."), profile.TraceProfile).Stop()
+			defer profile.Start(profile.ProfilePath(".")).Stop()
 		}
-		var manager entity.Manager
-		world := &commonPhysics.World{Space: commonPhysics.NewSpace()}
-		manager.AddSystem(health.New(world)) // every 50 ms
-		manager.AddSystem(movement.New(world))
-		manager.AddSystem(shooting.New(&manager, world))
-		manager.AddSystem(physics.New(&manager, world, worldRadius))
-		manager.AddSystem(perceiving.New(world))
-		manager.AddSystem(despawning.New(&manager))
-		netwk := networking.New(&manager, world, worldRadius)
-		manager.AddSystem(netwk)
-		go func() {
-			ticker := time.NewTicker(tick)
-			defer ticker.Stop()
-			start := time.Now()
-			for t := range ticker.C {
-				delta := t.Sub(start).Seconds()
-				start = t
-				manager.Update(delta)
-			}
-			fmt.Println("game stopped")
-
-		}()
-		fmt.Println("game started")
-		http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := upgrader.Upgrade(w, r, nil)
-			if err != nil {
-				fmt.Println("error upgrading connection", err)
-				return
-			}
-			netwk.Add(net.Websocket(conn))
-		}))
+		var options []server.Option
 		if debug {
-			http.Handle("/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprintln(w, "debugging")
-				fmt.Fprintln(w, "=========")
-				for _, system := range manager.Systems() {
-					if debuggable, ok := system.(Debuggable); ok {
-						debuggable.Debug(w)
-						fmt.Fprintf(w, "---\n")
-					}
-				}
-			}))
+			options = append(options, server.Debug())
 		}
-		log.Fatal(http.ListenAndServe(addr, nil))
+		options = append(options, server.TickRate(tick), server.BindAddress(addr), server.WorldRadius(worldRadius))
+		server.Start(options...)
 	},
-}
-
-type Debuggable interface {
-	Debug(to io.Writer)
 }
 
 func Execute() {
@@ -127,9 +67,9 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.Flags().StringVar(&addr, "addr", ":8080", "Accept incoming requests at this address.")
+	rootCmd.Flags().StringVar(&addr, "addr", ":7722", "Accept incoming requests at this address.")
 	rootCmd.Flags().Float64Var(&worldRadius, "radius", 10000, "Radius of the game world.")
-	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Millisecond*20, "Duration of a game tick")
+	rootCmd.Flags().DurationVarP(&tick, "tick", "t", time.Second/20, "Duration of a game tick")
 	rootCmd.Flags().BoolVar(&prof, "profile", false, "Enable performance profiling.")
 	rootCmd.Flags().BoolVar(&debug, "debug", false, "Enable debugging endpoint.")
 }

@@ -2,44 +2,32 @@ package physics
 
 import (
 	"github.com/20zinnm/entity"
-	"sync"
-	"github.com/20zinnm/spac/common/world"
+	"github.com/jakecoffman/cp"
 )
 
 type System struct {
-	world      *world.World
-	entitiesMu sync.RWMutex
-	entities   map[entity.ID]world.Component
+	space    *cp.Space
+	entities map[entity.ID]*cp.Body
 }
 
-func New(w *world.World) *System {
+func New(space *cp.Space) *System {
 	return &System{
-		world:    w,
-		entities: make(map[entity.ID]world.Component),
+		space:    space,
+		entities: make(map[entity.ID]*cp.Body),
 	}
 }
 
 func (s *System) Update(delta float64) {
-	s.world.Lock()
-	defer s.world.Unlock()
-	s.entitiesMu.RLock()
-	defer s.entitiesMu.RUnlock()
-	s.world.Space.Step(delta)
+	s.space.Step(delta)
 }
 
-func (s *System) Add(entity entity.ID, component world.Component) {
-	s.entitiesMu.Lock()
+func (s *System) Add(entity entity.ID, component *cp.Body) {
 	s.entities[entity] = component
-	s.entitiesMu.Unlock()
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.entitiesMu.Lock()
-	defer s.entitiesMu.Unlock()
-	if c, ok := s.entities[entity]; ok {
-		s.world.Lock()
-		s.world.Space.RemoveBody(c.Body)
-		s.world.Unlock()
+	if body, ok := s.entities[entity]; ok {
+		s.space.RemoveBody(body)
 		delete(s.entities, entity)
 	}
 }

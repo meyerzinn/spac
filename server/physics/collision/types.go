@@ -3,6 +3,7 @@ package collision
 import "github.com/jakecoffman/cp"
 
 const (
-	Health cp.CollisionType = 1 << 1
+	Damageable cp.CollisionType = 1 << (iota + 1)
 	Perceiving
+	Perceivable
 )

@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/20zinnm/spac/client/game"
+	"github.com/faiface/pixel/pixelgl"
 	"github.com/mitchellh/go-homedir"
+	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/faiface/pixel/pixelgl"
-	"github.com/20zinnm/spac/client/game"
-	"github.com/pkg/profile"
 )
 
 var (
@@ -45,9 +45,8 @@ var rootCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if prof {
-			defer profile.Start(profile.ProfilePath("."), profile.TraceProfile).Stop()
+			defer profile.Start(profile.ProfilePath(".")).Stop()
 		}
-
 		pixelgl.Run(func() { game.Run(host) })
 	},
 }
@@ -64,7 +63,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.Flags().StringVar(&host, "host", "localhost:8080", "The host to connect to")
+	rootCmd.Flags().StringVar(&host, "host", "localhost:7722", "The host to connect to")
 	rootCmd.Flags().BoolVar(&prof, "profile", false, "Enable profiling")
 }
 

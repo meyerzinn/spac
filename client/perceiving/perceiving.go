@@ -1,55 +1,55 @@
 package perceiving
 
 import (
-	"github.com/20zinnm/spac/common/net/downstream"
-	"github.com/20zinnm/entity"
-	"sync"
-	"github.com/20zinnm/spac/common/world"
-	"github.com/20zinnm/spac/client/rendering"
-	"github.com/20zinnm/spac/client/physics"
-	"time"
-	"github.com/google/flatbuffers/go"
 	"fmt"
+	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/client/physics"
+	"github.com/20zinnm/spac/client/rendering"
+	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/google/flatbuffers/go"
+	"github.com/jakecoffman/cp"
+	"sync"
 )
 
 type Updateable interface {
-	Update(bytes []byte, pos flatbuffers.UOffsetT)
+	Update(*flatbuffers.Table)
 }
 
 type System struct {
-	manager *entity.Manager
-	world   *world.World
-	// stateMu guards self, entities, and last
-	stateMu sync.RWMutex
-	self    entity.ID
-	//latency  *int64
-	entities map[entity.ID]Updateable
-	last     time.Time // ns since last update
+	manager     *entity.Manager
+	space       *cp.Space
+	perceptions chan *downstream.Perception
+	self        entity.ID
+	entitiesMu  sync.RWMutex
+	entities    map[entity.ID]Updateable
 }
 
-func New(manager *entity.Manager, world *world.World, self entity.ID, /* latency *int64*/) *System {
+func New(manager *entity.Manager, space *cp.Space, self entity.ID /* latency *int64*/) *System {
 	return &System{
-		manager: manager,
-		world:   world,
-		self:    self,
-		//latency:  latency,
-		entities: make(map[entity.ID]Updateable),
+		manager:     manager,
+		space:       space,
+		self:        self,
+		perceptions: make(chan *downstream.Perception, 8),
+		entities:    make(map[entity.ID]Updateable),
 	}
 }
 
 func (s *System) Update(delta float64) {
+	for {
+		select {
+		case p := <-s.perceptions:
+			s.processPerception(p)
+		default:
+			return
+		}
+	}
 }
 
 func (s *System) Perceive(perception *downstream.Perception) {
-	s.world.Lock()
-	defer s.world.Unlock()
-	s.stateMu.Lock()
-	defer s.stateMu.Unlock()
+	s.perceptions <- perception
+}
 
-	//now := time.Now()
-	//delta := now.Sub(s.last).Seconds()
-	//s.last = now
-
+func (s *System) processPerception(perception *downstream.Perception) {
 	known := make(map[entity.ID]struct{}, perception.EntitiesLength())
 	for i := 0; i < perception.EntitiesLength(); i++ {
 		e := new(downstream.Entity)
@@ -64,13 +64,13 @@ func (s *System) Perceive(perception *downstream.Perception) {
 		known[e.Id()] = struct{}{}
 		updater, ok := s.entities[e.Id()]
 		if ok {
-			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
+			updater.Update(snapshotTable)
 		} else {
 			id := e.Id()
 			var updater Updateable
 			switch e.SnapshotType() {
 			case downstream.SnapshotBullet:
-				bullet := NewBullet(s.world.Space, id)
+				bullet := NewBullet(s.space, id)
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
 					case *physics.System:
@@ -82,7 +82,7 @@ func (s *System) Perceive(perception *downstream.Perception) {
 				}
 				updater = bullet
 			case downstream.SnapshotShip:
-				ship := NewShip(s.world.Space, id)
+				ship := NewShip(s.space, id)
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
 					case *physics.System:
@@ -95,19 +95,8 @@ func (s *System) Perceive(perception *downstream.Perception) {
 					}
 				}
 				updater = ship
-				//id := e.Id()
-				//physicsC := bullet.Physics(s.world.Space)
-				//for _, system := range s.manager.Systems() {
-				//	switch sys := system.(type) {
-				//	case *physics.System:
-				//		sys.Add(id, physicsC)
-				//	case *rendering.System:
-				//		sys.Add(id, bullet.Renderable(physicsC))
-				//	}
-				//}
-				//updater = UpdaterFunc(bullet.Updateable(physicsC))
 			}
-			updater.Update(snapshotTable.Bytes, snapshotTable.Pos)
+			updater.Update(snapshotTable)
 			s.entities[id] = updater
 		}
 	}
@@ -119,10 +108,8 @@ func (s *System) Perceive(perception *downstream.Perception) {
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.stateMu.Lock()
 	delete(s.entities, entity)
 	if entity == s.self {
 		fmt.Println("died")
 	}
-	s.stateMu.Unlock()
 }

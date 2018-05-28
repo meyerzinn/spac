@@ -1,14 +1,14 @@
 package game
 
 import (
-	"github.com/20zinnm/spac/common/net"
-	"log"
-	"github.com/20zinnm/spac/common/net/downstream"
-	"github.com/google/flatbuffers/go"
 	"fmt"
-	"github.com/faiface/pixel/pixelgl"
-	"github.com/20zinnm/spac/common/net/upstream"
+	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/builders"
+	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/common/net/upstream"
+	"github.com/faiface/pixel/pixelgl"
+	"github.com/google/flatbuffers/go"
+	"log"
 )
 
 type SpawningScene struct {
@@ -17,7 +17,7 @@ type SpawningScene struct {
 	next chan Scene
 }
 
-func newSpawning(win *pixelgl.Window, conn net.Connection, name string) *SpawningScene {
+func NewSpawning(win *pixelgl.Window, conn net.Connection, name string) *SpawningScene {
 	scene := &SpawningScene{win: win,
 		conn: conn,
 		next: make(chan Scene),
@@ -34,11 +34,11 @@ func newSpawning(win *pixelgl.Window, conn net.Connection, name string) *Spawnin
 				log.Fatalln("failed to decode packet")
 			}
 			if message.PacketType() != downstream.PacketSpawn {
-				fmt.Println("received packet other than spawn", message.PacketType(),downstream.PacketSpawn)
+				fmt.Println("received packet other than spawn", message.PacketType(), downstream.PacketSpawn)
 			}
 			spawn := new(downstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)
-			scene.next <- newPlaying(win, conn, spawn.Id())
+			scene.next <- NewPlaying(win, conn, spawn.Id())
 			return
 		}
 	}()

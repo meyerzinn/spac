@@ -1,23 +1,21 @@
 package ship
 
 import (
-	"github.com/20zinnm/spac/server/shooting"
-	"github.com/20zinnm/spac/common/net"
-	"github.com/jakecoffman/cp"
-	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/net/downstream"
-	"math"
-	"github.com/20zinnm/spac/server/movement"
-	"github.com/20zinnm/spac/common/world"
-	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/entity"
-	"sync"
+	"github.com/20zinnm/spac/common/net"
+	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/server/damaging"
+	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/physics/collision"
+	"github.com/20zinnm/spac/server/shooting"
+	"github.com/google/flatbuffers/go"
+	"github.com/jakecoffman/cp"
+	"math"
 )
 
 const (
 	LinearForce     float64 = 400
-	AngularVelocity float64 = 1
+	AngularVelocity float64 = 0.8
 )
 
 var shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
@@ -29,31 +27,29 @@ type Controls struct {
 
 type Entity struct {
 	ID       entity.ID
+	Conn     net.Connection
 	Name     string
 	Controls Controls
-	Physics  world.Component
-	Conn     net.Connection
-	Health   *health.Component
+	Physics  *cp.Body
+	Health   *damaging.Component
 	Shooting *shooting.Component
-	sync.RWMutex
+	//sync.RWMutex // No need for mutex because there is no condition where an entity is updated and serialized simultaneously.
 }
 
-func New(w *world.World, id entity.ID, name string, conn net.Connection) *Entity {
-	w.Lock()
-	body := w.Space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 4, shipVertices, cp.Vector{}, 0)))
+func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entity {
+	body := space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 4, shipVertices, cp.Vector{}, 0)))
 	body.UserData = id
-	shipShape := w.Space.AddShape(cp.NewPolyShape(body, 4, shipVertices, cp.NewTransformIdentity(), 0))
-	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Health|collision.Perceiving), cp.ALL_CATEGORIES))
-	physics := world.Component{Body: body}
-	w.Unlock()
-	var health health.Component
-	health = 100
+	shipShape := space.AddShape(cp.NewPolyShape(body, 4, shipVertices, cp.NewTransformIdentity(), 0))
+	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Damageable|collision.Perceiving|collision.Perceivable), uint(collision.Damageable)))
 	return &Entity{
 		ID:      id,
 		Name:    name,
-		Physics: physics,
+		Physics: body,
 		Conn:    conn,
-		Health:  &health,
+		Health: &damaging.Component{
+			Value: 100,
+			Max:   100,
+		},
 		Shooting: &shooting.Component{
 			Cooldown:       20,
 			BulletForce:    1000,
@@ -63,8 +59,6 @@ func New(w *world.World, id entity.ID, name string, conn net.Connection) *Entity
 }
 
 func (s *Entity) Position() cp.Vector {
-	s.RLock()
-	defer s.RUnlock()
 	return s.Physics.Position()
 }
 
@@ -73,8 +67,6 @@ func (s *Entity) Perceive(perception []byte) {
 }
 
 func (s *Entity) Snapshot(b *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
-	s.RLock()
-	defer s.RUnlock()
 	var n *flatbuffers.UOffsetT
 	if !known {
 		n = new(flatbuffers.UOffsetT)
@@ -85,7 +77,7 @@ func (s *Entity) Snapshot(b *flatbuffers.Builder, known bool) flatbuffers.UOffse
 	downstream.ShipAddVelocity(b, downstream.CreateVector(b, float32(s.Physics.Velocity().X), float32(s.Physics.Velocity().Y)))
 	downstream.ShipAddAngle(b, float32(s.Physics.Angle()))
 	downstream.ShipAddAngularVelocity(b, float32(s.Physics.AngularVelocity()))
-	downstream.ShipAddHealth(b, int16(math.Max(float64(*s.Health), 0)))
+	downstream.ShipAddHealth(b, int16(math.Max(s.Health.Value, 0)))
 	if s.Shooting.Armed() {
 		downstream.ShipAddArmed(b, 1)
 	} else {

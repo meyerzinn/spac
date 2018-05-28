@@ -1,19 +1,27 @@
 package stars
 
 import (
-	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel"
-	"math"
+	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
 	"golang.org/x/image/colornames"
+	"math"
+	"sync"
 )
 
 const (
 	Seed = 0x9d2c5681
 )
 
+var (
+	imdMu = new(sync.Mutex)
+	imd   = imdraw.New(nil)
+)
+
 func Static(win *pixelgl.Window) {
-	imd := imdraw.New(nil)
+	imdMu.Lock()
+	defer imdMu.Unlock()
+	imd.Clear()
 	imd.Color = colornames.Darkgray
 	Draw(imd, pixel.ZV, win.Bounds(), 4)
 	imd.Color = colornames.Gray

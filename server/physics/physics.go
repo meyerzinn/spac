@@ -1,56 +1,45 @@
 package physics
 
 import (
+	"fmt"
 	"github.com/20zinnm/entity"
-	"sync"
 	"github.com/jakecoffman/cp"
-	"github.com/20zinnm/spac/common/world"
+	"io"
 )
 
 type System struct {
-	world      *world.World
-	radius     float64
-	manager    *entity.Manager
-	entitiesMu sync.RWMutex
-	entities   map[entity.ID]world.Component
+	space    *cp.Space
+	radius   float64
+	manager  *entity.Manager
+	entities map[entity.ID]*cp.Body
 }
 
-func New(manager *entity.Manager, w *world.World, radius float64) *System {
+func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
 	return &System{
-		world:    w,
+		space:    space,
 		radius:   radius,
-		entities: make(map[entity.ID]world.Component),
+		entities: make(map[entity.ID]*cp.Body),
 		manager:  manager,
 	}
 }
 
 func (s *System) Update(delta float64) {
-	s.world.Lock()
-	defer s.world.Unlock()
-
-	s.world.Space.Step(delta)
-	s.entitiesMu.RLock()
-	for id, component := range s.entities {
-		if !component.Position().Near(cp.Vector{}, s.radius) {
-			go s.manager.Remove(id)
-		}
-	}
-	s.entitiesMu.RUnlock()
+	s.space.Step(delta)
 }
 
-func (s *System) Add(entity entity.ID, component world.Component) {
-	s.entitiesMu.Lock()
-	s.entities[entity] = component
-	s.entitiesMu.Unlock()
+func (s *System) Add(entity entity.ID, body *cp.Body) {
+	s.entities[entity] = body
+	body.UserData = entity
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.entitiesMu.Lock()
-	if c, ok := s.entities[entity]; ok {
-		s.world.Lock()
-		s.world.Space.RemoveBody(c.Body)
-		s.world.Unlock()
+	if body, ok := s.entities[entity]; ok {
+		s.space.RemoveBody(body)
 		delete(s.entities, entity)
 	}
-	s.entitiesMu.Unlock()
+}
+
+func (s *System) Debug(w io.Writer) {
+	fmt.Fprintln(w, "physics system")
+	fmt.Fprintf(w, "entities=%d\n", len(s.entities))
 }

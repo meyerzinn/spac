@@ -1,18 +1,19 @@
 package game
 
 import (
+	"fmt"
+	"github.com/20zinnm/spac/client/fonts"
+	"github.com/20zinnm/spac/client/stars"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/downstream"
-	"log"
-	"github.com/google/flatbuffers/go"
-	"net/url"
-	"github.com/gorilla/websocket"
-	"fmt"
+	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/faiface/pixel/text"
+	"github.com/google/flatbuffers/go"
+	"github.com/gorilla/websocket"
 	"golang.org/x/image/colornames"
-	"github.com/faiface/pixel"
-	"github.com/20zinnm/spac/client/fonts"
+	"log"
+	"net/url"
 )
 
 type ConnectingScene struct {
@@ -29,6 +30,7 @@ func (s *ConnectingScene) Update(dt float64) {
 		CurrentScene = scene
 	default:
 		s.win.Clear(colornames.Black)
+		stars.Static(s.win)
 		s.txt.Clear()
 		s.dots++
 		l := "Connecting"
@@ -80,7 +82,7 @@ func newConnecting(win *pixelgl.Window, host string) *ConnectingScene {
 			}
 			settings := new(downstream.ServerSettings)
 			settings.Init(packetTable.Bytes, packetTable.Pos)
-			scene.next <- newMenu(win, conn)
+			scene.next <- NewSpawnMenu(win, conn)
 			return
 		}
 	}()

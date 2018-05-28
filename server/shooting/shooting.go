@@ -1,39 +1,39 @@
 package shooting
 
 import (
-	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/entity"
-	"sync"
+	"github.com/20zinnm/spac/server/damaging"
 	"github.com/20zinnm/spac/server/despawning"
+	"github.com/20zinnm/spac/server/entities/bullet"
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/server/physics"
-	"github.com/20zinnm/spac/server/entities/bullet"
-	"github.com/20zinnm/spac/server/health"
+	"github.com/jakecoffman/cp"
+	"sync"
 )
 
 type shootingEntity struct {
 	controller Controller
 	last       Controls
-	physics    world.Component
+	physics    *cp.Body
 	*Component
 }
 
 type System struct {
 	manager    *entity.Manager
-	world      *world.World
+	space      *cp.Space
 	entitiesMu sync.RWMutex
 	entities   map[entity.ID]*shootingEntity
 }
 
-func New(manager *entity.Manager, world *world.World) *System {
+func New(manager *entity.Manager, space *cp.Space) *System {
 	return &System{
 		manager:  manager,
-		world:    world,
+		space:    space,
 		entities: make(map[entity.ID]*shootingEntity),
 	}
 }
 
-func (s *System) Add(id entity.ID, component *Component, controller Controller, body world.Component) {
+func (s *System) Add(id entity.ID, component *Component, controller Controller, body *cp.Body) {
 	s.entitiesMu.Lock()
 	s.entities[id] = &shootingEntity{physics: body, controller: controller, Component: component}
 	s.entitiesMu.Unlock()
@@ -54,13 +54,10 @@ func (s *System) Update(delta float64) {
 		}
 		if e.tta == 0 && e.last.Shooting {
 			id := s.manager.NewEntity()
-			s.world.Lock()
-			physicsC := bullet.Physics(s.world.Space, id, owner, e.physics, e.BulletForce)
-			s.world.Unlock()
+			physicsC := bullet.Physics(s.space, id, owner, e.physics, e.BulletForce)
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
-				case *health.System:
-
+				case *damaging.System:
 				case *physics.System:
 					sys.Add(id, physicsC)
 				case *despawning.System:

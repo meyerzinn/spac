@@ -1,21 +1,21 @@
 package game
 
 import (
+	"fmt"
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/client/perceiving"
-	"github.com/20zinnm/spac/common/net"
-	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/20zinnm/spac/common/net/builders"
-	"github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/client/physics"
 	"github.com/20zinnm/spac/client/rendering"
-	"github.com/faiface/pixel/pixelgl"
+	"github.com/20zinnm/spac/common/net"
+	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
+	"github.com/20zinnm/spac/common/net/upstream"
+	"github.com/20zinnm/spac/common/world"
+	"github.com/faiface/pixel/pixelgl"
 	"github.com/google/flatbuffers/go"
 	"os"
-	"fmt"
-	"time"
 	"sync/atomic"
-	"github.com/20zinnm/spac/client/physics"
+	"time"
 )
 
 type PlayingScene struct {
@@ -35,14 +35,9 @@ func (s *PlayingScene) Update(dt float64) {
 	case next := <-s.next:
 		fmt.Println("next scene (old:playing)")
 		CurrentScene = next
+		s.manager.Destroy()
 	default:
-		lastPerception := atomic.LoadInt64(&s.lastPerception)
-		//latency := atomic.LoadInt64(&s.latency)
-		//delta := math.Max(time.Now().Sub(time.Unix(0, lastPerception+latency)).Seconds(), 0)
-		//fmt.Println(lastPerception, latency, delta)
-		//s.manager.Update(delta)
-		delta := time.Now().Sub(time.Unix(0, lastPerception)).Seconds()
-		s.manager.Update(delta)
+		s.manager.Update(dt)
 	}
 }
 
@@ -90,23 +85,23 @@ func (s *PlayingScene) reader() {
 			perception := new(downstream.Perception)
 			perception.Init(packetTable.Bytes, packetTable.Pos)
 			atomic.SwapInt64(&s.lastPerception, time.Now().UnixNano())
-			s.perceiving.Perceive(perception)
+			go s.perceiving.Perceive(perception)
 		case downstream.PacketDeath:
-			s.next <- newMenu(s.win, s.conn)
+			s.next <- NewDeath(s.win, s.conn)
 			return
 		}
 	}
 }
 
-func newPlaying(win *pixelgl.Window, conn net.Connection, self entity.ID) *PlayingScene {
-	manager := new(entity.Manager)
+func NewPlaying(win *pixelgl.Window, conn net.Connection, self entity.ID) *PlayingScene {
+	manager := entity.NewManager()
 	scene := &PlayingScene{
 		win:     win,
 		conn:    conn,
 		manager: manager,
 		next:    make(chan Scene),
 	}
-	w := &world.World{Space: world.NewSpace()}
+	w := world.NewSpace()
 	scene.perceiving = perceiving.New(manager, w, self)
 	manager.AddSystem(scene.perceiving)
 	manager.AddSystem(physics.New(w))

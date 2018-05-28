@@ -1,22 +1,21 @@
 package networking
 
 import (
+	"fmt"
 	"github.com/20zinnm/entity"
-	"sync"
-	"github.com/20zinnm/spac/common/world"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/google/flatbuffers/go"
-	"fmt"
-	"time"
+	"github.com/20zinnm/spac/server/damaging"
 	"github.com/20zinnm/spac/server/entities/ship"
 	"github.com/20zinnm/spac/server/movement"
-	"github.com/20zinnm/spac/server/shooting"
-	"github.com/20zinnm/spac/server/health"
-	"github.com/20zinnm/spac/server/physics"
 	"github.com/20zinnm/spac/server/perceiving"
+	"github.com/20zinnm/spac/server/physics"
+	"github.com/20zinnm/spac/server/shooting"
+	"github.com/google/flatbuffers/go"
+	"github.com/jakecoffman/cp"
+	"time"
 )
 
 type Handler interface {
@@ -45,33 +44,38 @@ type networkingEntity struct {
 
 type System struct {
 	manager *entity.Manager
-	world   *world.World
+	space   *cp.Space
 	radius  float64
-	// stateMu guards connections, entities, and lookup
-	stateMu     sync.RWMutex
+	// all functions in updating are called at the start of the next tick, in order, to ensure synchronous access to resources.
+	updating    chan func()
 	connections map[net.Connection]struct{}
 	entities    map[entity.ID]net.Connection
 	lookup      map[net.Connection]networkingEntity
-	//movement map[entity.ID]chan movement.Controls
-	//shooting map[entity.ID]chan shooting.Controls
 }
 
-func New(manager *entity.Manager, world *world.World, radius float64) *System {
+func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
 	return &System{
 		manager:  manager,
-		world:    world,
+		space:    space,
 		radius:   radius,
+		updating: make(chan func(), 64),
 		entities: make(map[entity.ID]net.Connection),
 		lookup:   make(map[net.Connection]networkingEntity),
 	}
 }
 
 func (s *System) Update(_ float64) {
+	for {
+		select {
+		case fn := <-s.updating:
+			fn()
+		default:
+			return
+		}
+	}
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.stateMu.Lock()
-	defer s.stateMu.Unlock()
 	if c, ok := s.entities[entity]; ok {
 		go sendDeath(c)
 		if networkingEntity, ok := s.lookup[c]; ok {
@@ -83,20 +87,16 @@ func (s *System) Remove(entity entity.ID) {
 }
 
 func (s *System) Add(conn net.Connection) {
-	go s.handle(conn)
-}
-
-func (s *System) handle(conn net.Connection) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("networking error", err)
 		}
 		fmt.Println("client disconnected")
-		s.stateMu.Lock()
-		if e, ok := s.lookup[conn]; ok {
-			go s.manager.Remove(e.ID)
+		s.updating <- func() {
+			if e, ok := s.lookup[conn]; ok {
+				go s.manager.Remove(e.ID)
+			}
 		}
-		s.stateMu.Unlock()
 		err := conn.Close()
 		if err != nil {
 			fmt.Print("closing conn:", err)
@@ -127,11 +127,11 @@ func (s *System) handle(conn net.Connection) {
 		case upstream.PacketSpawn:
 			spawn := new(upstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)
-			s.handleSpawn(conn, spawn)
+			s.updating <- func() { s.handleSpawn(conn, spawn) }
 		case upstream.PacketControls:
 			controls := new(upstream.Controls)
 			controls.Init(packetTable.Bytes, packetTable.Pos)
-			s.handleControls(conn, controls)
+			s.updating <- func() { s.handleControls(conn, controls) }
 		default:
 			panic("received unknown packet from client")
 		}
@@ -169,7 +169,7 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 	movementQueue := make(chan movement.Controls, 16)
 	shootingQueue := make(chan shooting.Controls, 16)
 
-	entity := ship.New(s.world, id, name, conn)
+	entity := ship.New(s.space, id, name, conn)
 	// handle controls (split the ship controls channel into the movement and shooting control queues)
 	go func() {
 		var last ship.Controls
@@ -182,9 +182,11 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 				movementQueue <- c.Movement
 				last.Movement = c.Movement
 			}
-			entity.Lock()
-			entity.Controls = c
-			entity.Unlock()
+			s.updating <- func(c ship.Controls) func() {
+				return func() {
+					entity.Controls = c
+				}
+			}(c)
 		}
 	}()
 	for _, system := range s.manager.Systems() {
@@ -198,20 +200,16 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 			sys.Add(id, movementQueue, entity.Physics, ship.LinearForce, ship.AngularVelocity)
 		case *shooting.System:
 			sys.Add(id, entity.Shooting, shootingQueue, entity.Physics)
-		case *health.System:
+		case *damaging.System:
 			sys.Add(id, entity.Health)
 		}
 	}
 	// add entity to the networking index
-	s.stateMu.Lock()
 	s.entities[id] = conn
 	s.lookup[conn] = networkingEntity
-	s.stateMu.Unlock()
 }
 
 func (s *System) handleControls(conn net.Connection, controls *upstream.Controls) {
-	s.stateMu.RLock()
-	defer s.stateMu.RUnlock()
 	if e, ok := s.lookup[conn]; ok {
 		e.controls <- ship.Controls{
 			Shooting: shooting.Controls{

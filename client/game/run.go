@@ -1,12 +1,12 @@
 package game
 
 import (
-	"github.com/faiface/pixel/pixelgl"
-	"github.com/faiface/pixel"
-	"os/signal"
-	"os"
-	"time"
 	"fmt"
+	"github.com/faiface/pixel"
+	"github.com/faiface/pixel/pixelgl"
+	"os"
+	"os/signal"
+	"time"
 )
 
 func Run(host string) {
@@ -35,7 +35,7 @@ func Run(host string) {
 		default:
 			if win.Closed() {
 				fmt.Println("window closed; exiting")
-				os.Exit(0)
+				return
 			}
 			CurrentScene.Update(t.Sub(last).Seconds())
 			last = t

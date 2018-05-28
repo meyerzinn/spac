@@ -1,14 +1,14 @@
 package bullet
 
 import (
+	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/world"
-	"github.com/20zinnm/spac/common/net/downstream"
-	"github.com/20zinnm/entity"
+	"github.com/jakecoffman/cp"
 )
 
-func Perceivable(id entity.ID, physics world.Component) perceiving.Perceivable {
+func Perceivable(id entity.ID, physics *cp.Body) perceiving.Perceivable {
 	return perceiving.PerceivableFunc(func(b *flatbuffers.Builder, known bool) flatbuffers.UOffsetT {
 		downstream.BulletStart(b)
 		position := physics.Position()

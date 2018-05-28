@@ -1,22 +1,19 @@
 package perceiving
 
 import (
-	"github.com/20zinnm/spac/common/world"
-	"github.com/jakecoffman/cp"
 	"github.com/20zinnm/entity"
-	"image/color"
+	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
-	"sync"
-	"github.com/google/flatbuffers/go"
-	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/faiface/pixel/pixelgl"
+	"github.com/google/flatbuffers/go"
+	"github.com/jakecoffman/cp"
+	"image/color"
 )
 
 type Bullet struct {
 	ID      entity.ID
-	Physics world.Component
-	sync.RWMutex
+	Physics *cp.Body
 }
 
 func NewBullet(space *cp.Space, id entity.ID) *Bullet {
@@ -24,13 +21,11 @@ func NewBullet(space *cp.Space, id entity.ID) *Bullet {
 	space.AddShape(cp.NewCircle(body, 8, cp.Vector{}))
 	return &Bullet{
 		ID:      id,
-		Physics: world.Component{Body: body},
+		Physics: body,
 	}
 }
 
 func (b *Bullet) Draw(_ *pixelgl.Canvas, imd *imdraw.IMDraw) {
-	b.RLock()
-	defer b.RUnlock()
 	imd.Color = color.RGBA{
 		R: 74,
 		G: 136,
@@ -42,13 +37,11 @@ func (b *Bullet) Draw(_ *pixelgl.Canvas, imd *imdraw.IMDraw) {
 	imd.Circle(8, 0)
 }
 
-func (b *Bullet) Update(bytes []byte, pos flatbuffers.UOffsetT) {
+func (b *Bullet) Update(table *flatbuffers.Table) {
 	bullet := new(downstream.Bullet)
-	bullet.Init(bytes, pos)
+	bullet.Init(table.Bytes, table.Pos)
 	posn := bullet.Position(new(downstream.Vector))
 	vel := bullet.Velocity(new(downstream.Vector))
-	b.Lock()
-	defer b.Unlock()
 	b.Physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
 	b.Physics.SetVelocityVector(cp.Vector{X: float64(vel.X()), Y: float64(vel.Y())})
 }

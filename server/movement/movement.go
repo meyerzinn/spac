@@ -1,12 +1,10 @@
 package movement
 
 import (
-	"github.com/20zinnm/spac/common/world"
+	"fmt"
 	"github.com/20zinnm/entity"
-	"sync"
 	"github.com/jakecoffman/cp"
 	"io"
-	"fmt"
 )
 
 type Controller chan Controls
@@ -14,29 +12,22 @@ type Controller chan Controls
 type movementEntity struct {
 	in      Controller
 	last    Controls
-	physics world.Component
+	physics *cp.Body
 	linear  float64
 	angular float64
 }
 
 type System struct {
-	entitiesMu sync.RWMutex
-	entities   map[entity.ID]*movementEntity
-	world      *world.World
+	entities map[entity.ID]*movementEntity
 }
 
-func New(world *world.World) *System {
+func New() *System {
 	return &System{
-		world:    world,
 		entities: make(map[entity.ID]*movementEntity),
 	}
 }
 
 func (s *System) Update(delta float64) {
-	s.entitiesMu.RLock()
-	defer s.entitiesMu.RUnlock()
-	s.world.Lock()
-	defer s.world.Unlock()
 	for _, e := range s.entities {
 		select {
 		case n := <-e.in:
@@ -57,27 +48,21 @@ func (s *System) Update(delta float64) {
 }
 
 func (s *System) Remove(entity entity.ID) {
-	s.entitiesMu.Lock()
 	if _, ok := s.entities[entity]; ok {
 		delete(s.entities, entity)
 	}
-	s.entitiesMu.Unlock()
 }
 
-func (s *System) Add(id entity.ID, controller Controller, physics world.Component, linearForce float64, angularVelocity float64) {
-	s.entitiesMu.Lock()
+func (s *System) Add(id entity.ID, controller Controller, physics *cp.Body, linearForce float64, angularVelocity float64) {
 	s.entities[id] = &movementEntity{
 		in:      controller,
 		physics: physics,
 		linear:  linearForce,
 		angular: angularVelocity,
 	}
-	s.entitiesMu.Unlock()
 }
 
 func (s *System) Debug(w io.Writer) {
-	s.entitiesMu.Lock()
-	defer s.entitiesMu.Unlock()
 	fmt.Fprintln(w, "movement system")
 	fmt.Fprintf(w, "count=%d\n", len(s.entities))
 	fmt.Fprintln(w, "entities=")
