@@ -2,6 +2,8 @@
 
 Spac is a 2D MMO game written as a proof of concept for game development in Go and as an intellectual challenge.
 
+![Screenshot of gameplay](https://github.com/20zinnm/spac/blob/master/docs/images/Screenshot%202.png?raw=true)
+
 ## Getting Started
 
 These instructions will get you a copy of the server and client up and running on your local machine for development and testing purposes.
