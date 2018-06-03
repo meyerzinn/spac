@@ -10,8 +10,10 @@ import (
 	"golang.org/x/image/colornames"
 	"image/color"
 	"math"
-	"fmt"
 )
+
+type Target interface {
+}
 
 type System struct {
 	win      *pixelgl.Window
@@ -19,7 +21,7 @@ type System struct {
 	handler  InputHandler
 	entities map[entity.ID]Renderable
 	camPos   pixel.Vec
-	tracking Trackable
+	camera   Camera
 	canvas   *pixelgl.Canvas
 	imd      *imdraw.IMDraw
 }
@@ -39,22 +41,16 @@ func (s *System) Add(entity entity.ID, renderable Renderable) {
 	s.entities[entity] = renderable
 }
 
-func (s *System) Track(trackable Trackable) {
-	s.tracking = trackable
+func (s *System) SetCamera(camera Camera) {
+	s.camera = camera
 }
-
-var lastHealth int
 
 func (s *System) Update(delta float64) {
 	var targetPosn pixel.Vec
 	var health int
-	if s.tracking != nil {
-		targetPosn = s.tracking.Position()
-		health = s.tracking.Health()
-		if health != lastHealth {
-			fmt.Println(health)
-			lastHealth = health
-		}
+	if s.camera != nil {
+		targetPosn = s.camera.Position()
+		health = s.camera.Health()
 	}
 	inputs := Inputs{
 		Left:   s.win.Pressed(pixelgl.KeyA),
@@ -103,19 +99,24 @@ func (s *System) Remove(entity entity.ID) {
 	delete(s.entities, entity)
 }
 
-var healthOverlayVertices = []pixel.Vec{{256, 15}, {768, 15}, {768, 55}, {256, 55}}
-
-//var healthOverlayInnerVertices = []pixel.Vec{{}}
+var healthOverlayVertices = []pixel.Vec{{256, 15}, {256, 45}, {768, 45}, {768, 15}}
+var healthOverlayFullLength = 512
 
 func drawHealthOverlay(imd *imdraw.IMDraw, bounds pixel.Rect, health int) {
-	//fill := health / 100
 	scale := bounds.W() / 1024
-	imd.Color = color.RGBA{R: 46, G: 204, B: 113, A: 204}
-	ref := healthOverlayVertices[0]
-	imd.Push(ref.Scaled(scale))
-	imd.Push(ref.Add(pixel.V(float64(health/100*512), 0)).Scaled(scale))
-	imd.Push(ref.Add(pixel.V(float64(health/100*510), 40)).Scaled(scale))
-	imd.Push(ref.Add(pixel.V(0, 40)).Scaled(scale))
+	filled := float64(health) / 100.0
+	if health > 50 {
+		imd.Color = color.RGBA{R: 46, G: 204, B: 113, A: 204}
+	} else if health > 30 {
+		imd.Color = color.RGBA{R: 211, G: 84, A: 255}
+	} else {
+		imd.Color = color.RGBA{R: 192, G: 57, B: 43, A: 255}
+	}
+	imd.Push(healthOverlayVertices[0].Scaled(scale))
+	imd.Push(healthOverlayVertices[1].Scaled(scale))
+	off := pixel.Vec{X: float64(healthOverlayFullLength) * filled}
+	imd.Push(healthOverlayVertices[1].Add(off).Scaled(scale))
+	imd.Push(healthOverlayVertices[0].Add(off).Scaled(scale))
 	imd.Polygon(0)
 	imd.Color = color.RGBA{R: 189, G: 195, B: 199, A: 204}
 	for _, v := range healthOverlayVertices {

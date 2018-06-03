@@ -75,6 +75,7 @@ func Start(options ...Option) {
 		o(server)
 	}
 	var manager = entity.NewManager()
+	defer manager.Destroy()
 	space := world.NewSpace()
 	manager.AddSystem(bounding.New(server.radius))
 	manager.AddSystem(movement.New())

@@ -40,7 +40,8 @@ func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entit
 	body := space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 4, shipVertices, cp.Vector{}, 0)))
 	body.UserData = id
 	shipShape := space.AddShape(cp.NewPolyShape(body, 4, shipVertices, cp.NewTransformIdentity(), 0))
-	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Damageable|collision.Perceivable), uint(collision.Damageable|collision.Perceiving)))
+	shipShape.SetCollisionType(collision.Ship)
+	shipShape.SetFilter(cp.NewShapeFilter(uint(id), uint(collision.Damageable|collision.Perceivable), cp.ALL_CATEGORIES))
 	return &Entity{
 		ID:      id,
 		Name:    name,
@@ -48,12 +49,12 @@ func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entit
 		Conn:    conn,
 		Health: &health.Component{
 			Value: 100,
-			Max:   100,
 		},
 		Shooting: &shooting.Component{
 			Cooldown:       20,
 			BulletForce:    1000,
 			BulletLifetime: 100,
+			BulletDamage:   20,
 		},
 	}
 }
@@ -77,7 +78,7 @@ func (s *Entity) Snapshot(b *flatbuffers.Builder, known bool) flatbuffers.UOffse
 	downstream.ShipAddVelocity(b, downstream.CreateVector(b, float32(s.Physics.Velocity().X), float32(s.Physics.Velocity().Y)))
 	downstream.ShipAddAngle(b, float32(s.Physics.Angle()))
 	downstream.ShipAddAngularVelocity(b, float32(s.Physics.AngularVelocity()))
-	downstream.ShipAddHealth(b, int16(math.Max(s.Health.Value, 0)))
+	downstream.ShipAddHealth(b, int16(math.Max(math.Round(s.Health.Value), 0)))
 	if s.Shooting.Armed() {
 		downstream.ShipAddArmed(b, 1)
 	} else {

@@ -47,7 +47,8 @@ var rootCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if prof {
-			defer profile.Start(profile.ProfilePath(".")).Stop()
+			defer profile.Start(profile.ProfilePath("."), profile.MemProfile).Stop()
+
 		}
 		var options []server.Option
 		if debug {

@@ -5,6 +5,7 @@ type Component struct {
 	// ticks to armed
 	tta            uint
 	BulletForce    float64
+	BulletDamage   float64
 	BulletLifetime uint
 }
 

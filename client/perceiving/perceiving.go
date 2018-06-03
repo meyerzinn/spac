@@ -90,7 +90,7 @@ func (s *System) processPerception(perception *downstream.Perception) {
 					case *rendering.System:
 						sys.Add(id, ship)
 						if id == s.self {
-							sys.Track(ship)
+							sys.SetCamera(ship)
 						}
 					}
 				}

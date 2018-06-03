@@ -15,8 +15,8 @@ func New(manager *entity.Manager) *System {
 	return &System{manager: manager, entities: make(map[entity.ID]*Component)}
 }
 
-func (s *System) Add(entity entity.ID, component Component) {
-	s.entities[entity] = &component
+func (s *System) Add(entity entity.ID, component *Component) {
+	s.entities[entity] = component
 }
 
 func (s *System) Update(delta float64) {

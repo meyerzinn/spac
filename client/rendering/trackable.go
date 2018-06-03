@@ -2,7 +2,7 @@ package rendering
 
 import "github.com/faiface/pixel"
 
-type Trackable interface {
+type Camera interface {
 	Position() pixel.Vec
 	Health() int
 }

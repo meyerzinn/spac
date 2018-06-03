@@ -17,6 +17,9 @@ import (
 	"github.com/jakecoffman/cp"
 	"time"
 	"github.com/20zinnm/spac/server/bounding"
+	"io"
+	"sync/atomic"
+	"math"
 )
 
 type Handler interface {
@@ -47,12 +50,17 @@ type System struct {
 	manager *entity.Manager
 	space   *cp.Space
 	radius  float64
+	// instrumentation
+	in      int64
+	rate    uint64
+	ticks   int64
+	handled int64
 	// all functions in updating are called at the start of the next tick, in order, to ensure synchronous access to resources.
 	updating    chan func()
 	connections map[net.Connection]struct{}
 	entities    map[entity.ID]net.Connection
 	lookup      map[net.Connection]networkingEntity
- }
+}
 
 func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
 	return &System{
@@ -65,7 +73,12 @@ func New(manager *entity.Manager, space *cp.Space, radius float64) *System {
 	}
 }
 
-func (s *System) Update(_ float64) {
+func (s *System) Update(dt float64) {
+	s.ticks++
+	in := atomic.SwapInt64(&s.in, 0)
+	point := float64(in) / dt
+	rate := math.Float64frombits(atomic.LoadUint64(&s.rate))
+	atomic.StoreUint64(&s.rate, math.Float64bits(rate+point/float64(s.ticks)))
 	for {
 		select {
 		case fn := <-s.updating:
@@ -88,6 +101,7 @@ func (s *System) Remove(entity entity.ID) {
 }
 
 func (s *System) Add(conn net.Connection) {
+	atomic.AddInt64(&s.handled, 1)
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("networking error", err)
@@ -104,6 +118,7 @@ func (s *System) Add(conn net.Connection) {
 		} else {
 			fmt.Println("connection closed")
 		}
+		atomic.AddInt64(&s.handled, -1)
 	}()
 	fmt.Println("client connecting... sending server settings")
 	sendSettings(conn, s.radius)
@@ -113,6 +128,7 @@ func (s *System) Add(conn net.Connection) {
 		if err != nil { // client disconnected
 			panic(err)
 		}
+		atomic.AddInt64(&s.in, int64(len(data)))
 		message := upstream.GetRootAsMessage(data, 0)
 		packetTable := new(flatbuffers.Table)
 		if !message.Packet(packetTable) {
@@ -224,4 +240,10 @@ func (s *System) handleControls(conn net.Connection, controls *upstream.Controls
 			},
 		}
 	}
+}
+
+func (s *System) Debug(w io.Writer) {
+	fmt.Fprintln(w, "networking")
+	fmt.Fprintf(w, "connections=%d\n", atomic.LoadInt64(&s.handled))
+	fmt.Fprintf(w, "bytes in per second=%f\n", math.Float64frombits(atomic.LoadUint64(&s.rate)))
 }

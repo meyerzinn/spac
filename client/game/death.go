@@ -9,17 +9,21 @@ import (
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/faiface/pixel/text"
 	"golang.org/x/image/colornames"
+	"github.com/faiface/pixel/imdraw"
 )
 
 type DyingScene struct {
 	win  *pixelgl.Window
 	conn net.Connection
 	text *text.Text
+	imd  *imdraw.IMDraw
 }
 
 func NewDeath(win *pixelgl.Window, conn net.Connection) *DyingScene {
+	win.SetMatrix(pixel.IM)
 	return &DyingScene{
 		win:  win,
+		imd:  imdraw.New(nil),
 		conn: conn,
 		text: text.New(pixel.V(0, 0), fonts.Atlas),
 	}
@@ -30,9 +34,10 @@ func (s *DyingScene) Update(dt float64) {
 		CurrentScene = NewSpawnMenu(s.win, s.conn)
 		return
 	}
-	s.win.SetMatrix(pixel.IM)
 	s.win.Clear(colornames.Black)
-	stars.Static(s.win)
+	s.imd.Clear()
+	stars.Static(s.imd, s.win.Bounds())
+	s.imd.Draw(s.win)
 	lines := []string{
 		"It was a good run.",
 		"(press enter to continue)",

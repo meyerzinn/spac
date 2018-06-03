@@ -2,7 +2,6 @@ package perceiving
 
 import (
 	"github.com/20zinnm/entity"
-	"github.com/20zinnm/spac/client/fonts"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
@@ -11,17 +10,12 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/jakecoffman/cp"
 	"image/color"
+	"github.com/20zinnm/spac/client/fonts"
 	"math"
-	"sync"
 )
 
 var (
 	shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
-	textPool     = &sync.Pool{
-		New: func() interface{} {
-			return text.New(pixel.ZV, fonts.Atlas)
-		},
-	}
 )
 
 type Ship struct {
@@ -31,6 +25,7 @@ type Ship struct {
 	Thrusting bool
 	Armed     bool
 	Name      string
+	text      *text.Text
 }
 
 func NewShip(space *cp.Space, id entity.ID) *Ship {
@@ -51,7 +46,6 @@ func (s *Ship) Update(table *flatbuffers.Table) {
 	if shipUpdate.Name() != nil {
 		s.Name = string(shipUpdate.Name())
 	}
-	//fmt.Println(posn.X(), posn.Y())
 	s.Physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
 	s.Physics.SetVelocity(float64(vel.X()), float64(vel.Y()))
 	s.Physics.SetAngle(float64(shipUpdate.Angle()))
@@ -59,7 +53,6 @@ func (s *Ship) Update(table *flatbuffers.Table) {
 	s.Thrusting = shipUpdate.Thrusting() > 0
 	s.Armed = shipUpdate.Armed() > 0
 	s.health = int(shipUpdate.Health())
-
 }
 
 func (s *Ship) Position() pixel.Vec {
@@ -119,12 +112,13 @@ func (s *Ship) Draw(canvas *pixelgl.Canvas, imd *imdraw.IMDraw) {
 	}
 	// draw name
 	if s.Name != "" {
-		txt := textPool.Get().(*text.Text)
-		defer textPool.Put(txt)
-		txt.Clear()
-		txt.Write([]byte(s.Name))
-		txt.Draw(canvas, pixel.IM.Moved(p.Sub(pixel.Vec{txt.Bounds().W() / 2, -calcLabelY(s.Physics.Angle())})))
-		txt.Clear()
+		if s.text == nil {
+			s.text = text.New(pixel.Vec{}, fonts.Atlas)
+		}
+		s.text.Clear()
+		s.text.Write([]byte(s.Name))
+		s.text.Draw(canvas, pixel.IM.Moved(p.Sub(pixel.Vec{s.text.Bounds().W() / 2, -calcLabelY(s.Physics.Angle())})))
+		s.text.Clear()
 		//fmt.Println(s.Physics.Angle(), calcLabelY(s.Physics.Angle()))
 	}
 }

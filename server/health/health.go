@@ -41,24 +41,61 @@ func New(manager *entity.Manager, space *cp.Space) *System {
 			}
 		}
 	*/
-	handler := space.NewCollisionHandler(collision.Damageable, collision.Damageable)
-	handler.PreSolveFunc = func(arb *cp.Arbiter, space *cp.Space, userData interface{}) bool {
-		ab, bb := arb.Bodies()
-		if aid, ok := ab.UserData.(entity.ID); ok {
-			if bid, ok := bb.UserData.(entity.ID); ok {
-				if a, ok := system.entities[aid]; ok {
-					if b, ok := system.entities[bid]; ok {
-						ao, bo := a.Value, b.Value
-						a.Value -= bo
-						b.Value -= ao
-					}
+	shipBulletHandler := space.NewCollisionHandler(collision.Ship, collision.Bullet)
+	shipBulletHandler.PostSolveFunc = func(arb *cp.Arbiter, space *cp.Space, userData interface{}) {
+		a, b, ok := system.components(arb)
+		if ok {
+			a.Value -= b.Value
+			b.Value = 0
+		}
+	}
+	shipShipHandler := space.NewCollisionHandler(collision.Ship, collision.Ship)
+	shipShipHandler.PostSolveFunc = func(arb *cp.Arbiter, space *cp.Space, userData interface{}) {
+		a, b, ok := system.components(arb)
+		if ok {
+			impulse := arb.TotalImpulse().Length() / 5
+			a.Value -= impulse
+			b.Value -= impulse
+		}
+	}
+	bulletBulletHandler := space.NewCollisionHandler(collision.Bullet, collision.Bullet)
+	bulletBulletHandler.PostSolveFunc = func(arb *cp.Arbiter, space *cp.Space, userData interface{}) {
+		a, b, ok := system.components(arb)
+		if ok {
+			ao, bo := a.Value, b.Value
+			a.Value -= bo
+			b.Value -= ao
+		}
+	}
+	return system
+}
+
+func (s *System) components(arb *cp.Arbiter) (a *Component, b *Component, ok bool) {
+	ab, bb := arb.Bodies()
+	aid := ab.UserData.(entity.ID)
+	bid := bb.UserData.(entity.ID)
+	if a, ok := s.entities[aid]; ok {
+		if b, ok := s.entities[bid]; ok {
+			return a, b, true
+		}
+	}
+	return nil, nil, false
+}
+
+func (s *System) handler(arb *cp.Arbiter, space *cp.Space, userData interface{}) {
+	ab, bb := arb.Bodies()
+	if aid, ok := ab.UserData.(entity.ID); ok {
+		if bid, ok := bb.UserData.(entity.ID); ok {
+			if a, ok := s.entities[aid]; ok {
+				if b, ok := s.entities[bid]; ok {
+					ao, bo := a.Value, b.Value
+					a.Value -= bo
+					b.Value -= ao
+					fmt.Println(a.Value, b.Value)
 				}
 			}
 		}
-		return true
 	}
-	return system
-
 }
 
 func (s *System) Add(entity entity.ID, component *Component) {
@@ -82,6 +119,6 @@ func (s *System) Debug(w io.Writer) {
 	fmt.Fprintf(w, "count=%d\n", len(s.entities))
 	fmt.Fprintln(w, "entities=")
 	for id, component := range s.entities {
-		fmt.Fprintf(w, "> id=%d max=%f value=%f\n", id, component.Max, component.Value)
+		fmt.Fprintf(w, "> id=%d value=%f\n", id, component.Value)
 	}
 }

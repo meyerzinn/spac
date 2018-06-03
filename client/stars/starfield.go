@@ -3,32 +3,21 @@ package stars
 import (
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
-	"github.com/faiface/pixel/pixelgl"
 	"golang.org/x/image/colornames"
 	"math"
-	"sync"
 )
 
 const (
 	Seed = 0x9d2c5681
 )
 
-var (
-	gimdMu = new(sync.Mutex)
-	gImd   = imdraw.New(nil)
-)
-
-func Static(win *pixelgl.Window) {
-	gimdMu.Lock()
-	defer gimdMu.Unlock()
-	gImd.Clear()
-	gImd.Color = colornames.Darkgray
-	Draw(gImd, pixel.ZV, win.Bounds(), 4)
-	gImd.Color = colornames.Gray
-	Draw(gImd, pixel.ZV, win.Bounds(), 2)
-	gImd.Color = colornames.White
-	Draw(gImd, pixel.ZV, win.Bounds(), 1)
-	gImd.Draw(win)
+func Static(imd *imdraw.IMDraw, bounds pixel.Rect) {
+	imd.Color = colornames.Darkgray
+	Draw(imd, pixel.ZV, bounds, 4)
+	imd.Color = colornames.Gray
+	Draw(imd, pixel.ZV, bounds, 2)
+	imd.Color = colornames.White
+	Draw(imd, pixel.ZV, bounds, 1)
 }
 
 func Draw(imd *imdraw.IMDraw, cam pixel.Vec, bounds pixel.Rect, starscale int) {

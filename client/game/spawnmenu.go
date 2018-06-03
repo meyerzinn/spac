@@ -9,12 +9,14 @@ import (
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/faiface/pixel/text"
 	"golang.org/x/image/colornames"
+	"github.com/faiface/pixel/imdraw"
 )
 
 type SpawnMenuScene struct {
 	win     *pixelgl.Window
 	conn    net.Connection
 	text    *text.Text
+	imd     *imdraw.IMDraw
 	cursori int
 	name    string
 }
@@ -24,12 +26,15 @@ func NewSpawnMenu(win *pixelgl.Window, conn net.Connection) *SpawnMenuScene {
 		win:  win,
 		conn: conn,
 		text: text.New(pixel.V(0, 0), fonts.Atlas),
+		imd:  imdraw.New(nil),
 	}
 }
 
 func (s *SpawnMenuScene) Update(_ float64) {
 	s.win.Clear(colornames.Black)
-	stars.Static(s.win)
+	s.imd.Clear()
+	stars.Static(s.imd, s.win.Bounds())
+	s.imd.Draw(s.win)
 	s.name += s.win.Typed()
 	if s.win.JustPressed(pixelgl.KeyBackspace) {
 		if len(s.name) > 0 {

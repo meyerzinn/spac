@@ -14,6 +14,7 @@ import (
 	"golang.org/x/image/colornames"
 	"log"
 	"net/url"
+	"github.com/faiface/pixel/imdraw"
 )
 
 type ConnectingScene struct {
@@ -21,6 +22,7 @@ type ConnectingScene struct {
 	dots int
 	txt  *text.Text
 	win  *pixelgl.Window
+	imd  *imdraw.IMDraw
 }
 
 func (s *ConnectingScene) Update(dt float64) {
@@ -30,7 +32,9 @@ func (s *ConnectingScene) Update(dt float64) {
 		CurrentScene = scene
 	default:
 		s.win.Clear(colornames.Black)
-		stars.Static(s.win)
+		s.imd.Clear()
+		stars.Static(s.imd, s.win.Bounds())
+		s.imd.Draw(s.win)
 		s.txt.Clear()
 		s.dots++
 		l := "Connecting"
@@ -58,6 +62,7 @@ func newConnecting(win *pixelgl.Window, host string) *ConnectingScene {
 		next: make(chan Scene),
 		txt:  text.New(pixel.ZV, fonts.Atlas),
 		win:  win,
+		imd:  imdraw.New(nil),
 	}
 	go func() {
 		u := url.URL{Scheme: "ws", Host: host, Path: "/ws"}

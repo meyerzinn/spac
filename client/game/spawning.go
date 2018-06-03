@@ -19,7 +19,7 @@ type SpawningScene struct {
 
 func NewSpawning(win *pixelgl.Window, conn net.Connection, name string) *SpawningScene {
 	scene := &SpawningScene{
-		win: win,
+		win:  win,
 		conn: conn,
 		next: make(chan Scene),
 	}
@@ -39,6 +39,7 @@ func NewSpawning(win *pixelgl.Window, conn net.Connection, name string) *Spawnin
 			}
 			spawn := new(downstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)
+			fmt.Println("playing with id", spawn.Id())
 			scene.next <- NewPlaying(win, conn, spawn.Id())
 			return
 		}

@@ -54,16 +54,17 @@ func (s *System) Update(delta float64) {
 		}
 		if e.tta == 0 && e.last.Shooting {
 			id := s.manager.NewEntity()
-			physicsC := bullet.Physics(s.space, id, owner, e.physics, e.BulletForce)
+			bullet := bullet.New(s.space, id, owner, e.physics, e.BulletForce, e.BulletDamage, e.BulletLifetime, )
 			for _, system := range s.manager.Systems() {
 				switch sys := system.(type) {
 				case *health.System:
+					sys.Add(id, bullet.Health)
 				case *physics.System:
-					sys.Add(id, physicsC)
+					sys.Add(id, bullet.Physics)
 				case *despawning.System:
-					sys.Add(id, bullet.Despawning(e.BulletLifetime))
+					sys.Add(id, bullet.Despawning)
 				case *perceiving.System:
-					sys.AddPerceivable(id, bullet.Perceivable(id, physicsC))
+					sys.AddPerceivable(id, bullet)
 				}
 			}
 			e.tta = e.Cooldown
