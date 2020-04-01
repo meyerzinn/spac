@@ -13,11 +13,6 @@ import (
 	"math"
 )
 
-const (
-	LinearForce     float64 = 400
-	AngularVelocity float64 = 0.8
-)
-
 var shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
 
 type Controls struct {
@@ -26,14 +21,13 @@ type Controls struct {
 }
 
 type Entity struct {
-	ID       entity.ID
-	Conn     net.Connection
-	Name     string
-	Controls Controls
-	Physics  *cp.Body
-	Health   *health.Component
-	Shooting *shooting.Component
-	//sync.RWMutex // No need for mutex because there is no condition where an entity is updated and serialized simultaneously.
+	ID           entity.ID
+	Conn         net.Connection
+	Name         string
+	Controls     Controls
+	Physics      *cp.Body
+	Health       *health.Component
+	Shooting     *shooting.Component
 }
 
 func New(space *cp.Space, id entity.ID, name string, conn net.Connection) *Entity {
@@ -79,16 +73,8 @@ func (s *Entity) Snapshot(b *flatbuffers.Builder, known bool) flatbuffers.UOffse
 	downstream.ShipAddAngle(b, float32(s.Physics.Angle()))
 	downstream.ShipAddAngularVelocity(b, float32(s.Physics.AngularVelocity()))
 	downstream.ShipAddHealth(b, int16(math.Max(math.Round(s.Health.Value), 0)))
-	if s.Shooting.Armed() {
-		downstream.ShipAddArmed(b, 1)
-	} else {
-		downstream.ShipAddArmed(b, 0)
-	}
-	if s.Controls.Movement.Thrusting {
-		downstream.ShipAddThrusting(b, 1)
-	} else {
-		downstream.ShipAddThrusting(b, 0)
-	}
+	downstream.ShipAddArmed(b, s.Shooting.Armed())
+	downstream.ShipAddThrusting(b, s.Controls.Movement.Thrusting)
 	if n != nil {
 		downstream.ShipAddName(b, *n)
 	}

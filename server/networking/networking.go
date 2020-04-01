@@ -3,23 +3,23 @@ package networking
 import (
 	"fmt"
 	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/common/constants"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/20zinnm/spac/server/health"
+	"github.com/20zinnm/spac/server/bounding"
 	"github.com/20zinnm/spac/server/entities/ship"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/perceiving"
 	"github.com/20zinnm/spac/server/physics"
 	"github.com/20zinnm/spac/server/shooting"
 	"github.com/google/flatbuffers/go"
 	"github.com/jakecoffman/cp"
-	"time"
-	"github.com/20zinnm/spac/server/bounding"
 	"io"
-	"sync/atomic"
 	"math"
+	"sync/atomic"
 )
 
 type Handler interface {
@@ -137,10 +137,6 @@ func (s *System) Add(conn net.Connection) {
 		switch message.PacketType() {
 		case upstream.PacketNONE:
 			fmt.Println("received empty packet from client")
-		case upstream.PacketPing:
-			ping := new(upstream.Ping)
-			ping.Init(packetTable.Bytes, packetTable.Pos)
-			s.handlePing(conn, ping)
 		case upstream.PacketSpawn:
 			spawn := new(upstream.Spawn)
 			spawn.Init(packetTable.Bytes, packetTable.Pos)
@@ -153,14 +149,6 @@ func (s *System) Add(conn net.Connection) {
 			panic("received unknown packet from client")
 		}
 	}
-}
-
-func (s *System) handlePing(conn net.Connection, ping *upstream.Ping) {
-	b := builders.Get()
-	defer builders.Put(b)
-	downstream.PongStart(b)
-	downstream.PongAddTimestamp(b, time.Now().UnixNano())
-	conn.Write(net.MessageDown(b, downstream.PacketPong, downstream.PongEnd(b)))
 }
 
 func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
@@ -186,7 +174,7 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 	movementQueue := make(chan movement.Controls, 16)
 	shootingQueue := make(chan shooting.Controls, 16)
 
-	entity := ship.New(s.space, id, name, conn)
+	e := ship.New(s.space, id, name, conn)
 	// handle controls (split the ship controls channel into the movement and shooting control queues)
 	go func() {
 		var last ship.Controls
@@ -201,7 +189,7 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 			}
 			s.updating <- func(c ship.Controls) func() {
 				return func() {
-					entity.Controls = c
+					e.Controls = c
 				}
 			}(c)
 		}
@@ -209,20 +197,20 @@ func (s *System) handleSpawn(conn net.Connection, su *upstream.Spawn) {
 	for _, system := range s.manager.Systems() {
 		switch sys := system.(type) {
 		case *physics.System:
-			sys.Add(id, entity.Physics)
+			sys.Add(id, e.Physics)
 		case *perceiving.System:
-			sys.AddPerceiver(id, entity)
-			sys.AddPerceivable(id, entity)
+			sys.AddPerceiver(id, e)
+			sys.AddPerceivable(id, e)
 		case *movement.System:
-			sys.Add(id, movementQueue, entity.Physics, ship.LinearForce, ship.AngularVelocity)
+			sys.Add(id, movementQueue, e.Physics, constants.ShipLinearForce, constants.ShipAngularForce)
 		case *shooting.System:
-			sys.Add(id, entity.Shooting, shootingQueue, entity.Physics)
+			sys.Add(id, e.Shooting, shootingQueue, e.Physics)
 		case *health.System:
-			sys.Add(id, entity.Health)
+			sys.Add(id, e.Health)
 		case *bounding.System:
 		}
 	}
-	// add entity to the networking index
+	// add e to the networking index
 	s.entities[id] = conn
 	s.lookup[conn] = networkingEntity
 }
@@ -231,12 +219,12 @@ func (s *System) handleControls(conn net.Connection, controls *upstream.Controls
 	if e, ok := s.lookup[conn]; ok {
 		e.controls <- ship.Controls{
 			Shooting: shooting.Controls{
-				Shooting: controls.Shooting() > 0,
+				Shooting: controls.Shooting(),
 			},
 			Movement: movement.Controls{
-				Left:      controls.Left() > 0,
-				Right:     controls.Right() > 0,
-				Thrusting: controls.Thrusting() > 0,
+				Left:      controls.Left(),
+				Right:     controls.Right(),
+				Thrusting: controls.Thrusting(),
 			},
 		}
 	}

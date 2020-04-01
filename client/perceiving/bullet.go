@@ -2,46 +2,98 @@ package perceiving
 
 import (
 	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/client/physics"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
-	"github.com/google/flatbuffers/go"
-	"github.com/jakecoffman/cp"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"image/color"
+	"time"
 )
 
-type Bullet struct {
-	ID      entity.ID
-	Physics *cp.Body
+type bulletPhysics struct {
+	timestamp time.Time
+	physics.TranslationalState
 }
 
-func NewBullet(space *cp.Space, id entity.ID) *Bullet {
-	body := space.AddBody(cp.NewBody(1, cp.MomentForCircle(1, 0, 8, cp.Vector{})))
-	space.AddShape(cp.NewCircle(body, 8, cp.Vector{}))
+type Bullet struct {
+	ID entity.ID
+	physics.TranslationalState
+	bufferLen int
+	buffer    [InterpolationBuffer]bulletPhysics
+}
+
+func NewBullet(id entity.ID) *Bullet {
 	return &Bullet{
-		ID:      id,
-		Physics: body,
+		ID: id,
+	}
+}
+
+func (b *Bullet) FixedUpdate() {
+	interpolationTime := time.Now().Add(-InterpolationBackTime)
+	if b.buffer[0].timestamp.After(interpolationTime) {
+		// INTERPOLATE
+		for i := 1; i <= b.bufferLen; i++ {
+			if b.buffer[i].timestamp.Before(interpolationTime) || i == b.bufferLen-1 {
+				newer := b.buffer[i-1]
+				older := b.buffer[i]
+
+				length := newer.timestamp.Sub(older.timestamp).Seconds()
+				var t float64
+				if length > 0.0001 {
+					t = interpolationTime.Sub(older.timestamp).Seconds() / length
+				}
+				b.TranslationalState = b.Lerp(older.Lerp(newer.TranslationalState, t), InterpolationBackTime.Seconds())
+				return
+			}
+
+		}
+	} else {
+		// EXTRAPOLATE (rough)
+		dt := time.Now().Sub(b.buffer[0].timestamp).Seconds()
+		newer := b.Step(dt)
+		b.TranslationalState = b.TranslationalState.Lerp(b.buffer[0].Lerp(newer, InterpolationBackTime.Seconds()), InterpolationConstant)
 	}
 }
 
 func (b *Bullet) Draw(_ *pixelgl.Canvas, imd *imdraw.IMDraw) {
+
 	imd.Color = color.RGBA{
 		R: 74,
 		G: 136,
 		B: 212,
 		A: 255,
 	}
-	posn := b.Physics.Position()
-	imd.Push(pixel.Vec(posn))
+
+	imd.Push(pixel.Vec(b.Position))
 	imd.Circle(8, 0)
 }
 
-func (b *Bullet) Update(table *flatbuffers.Table) {
+func (b *Bullet) Update(timestamp time.Time, table *flatbuffers.Table) {
 	bullet := new(downstream.Bullet)
 	bullet.Init(table.Bytes, table.Pos)
-	posn := bullet.Position(new(downstream.Vector))
-	vel := bullet.Velocity(new(downstream.Vector))
-	b.Physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
-	b.Physics.SetVelocityVector(cp.Vector{X: float64(vel.X()), Y: float64(vel.Y())})
+	copy(b.buffer[1:], b.buffer[:])
+	b.buffer[0] = bulletPhysics{
+		timestamp: timestamp,
+		TranslationalState: physics.TranslationalState{
+			Position: tocpv(bullet.Position(new(downstream.Vector))),
+			Velocity: tocpv(bullet.Velocity(new(downstream.Vector))),
+		},
+	}
+	if b.bufferLen == 0 {
+		b.TranslationalState = b.buffer[0].TranslationalState
+	}
+	if b.bufferLen < InterpolationBuffer {
+		b.bufferLen++
+	}
+	//if posn.DistanceSq(b.lastPos) < 100 {
+	//	b.Physicb.SetPosition(b.lastPob.Lerp(posn, delta))
+	//	b.Physicb.SetVelocityVector(b.lastVel.Lerp(vel, delta))
+	//} else {
+	//	b.Physicb.SetPosition(posn)
+	//	b.Physicb.SetVelocityVector(vel)
+	//}
+	//b.lastPos = posn
+	//b.lastVel = vel
 }

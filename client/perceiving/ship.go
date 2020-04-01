@@ -2,61 +2,111 @@ package perceiving
 
 import (
 	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/client/physics"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
-	"github.com/faiface/pixel/text"
 	"github.com/google/flatbuffers/go"
 	"github.com/jakecoffman/cp"
 	"image/color"
-	"github.com/20zinnm/spac/client/fonts"
 	"math"
+	"sort"
+	"time"
 )
 
 var (
 	shipVertices = []cp.Vector{{0, 51}, {-24, -21}, {0, -9}, {24, -21}}
 )
 
-type Ship struct {
-	ID        entity.ID
-	health    int
-	Physics   *cp.Body
-	Thrusting bool
-	Armed     bool
-	Name      string
-	text      *text.Text
+type shipPhysics struct {
+	timestamp time.Time
+	physics.TranslationalState
+	physics.RotationalState
 }
 
-func NewShip(space *cp.Space, id entity.ID) *Ship {
-	body := space.AddBody(cp.NewBody(1, cp.MomentForPoly(1, 3, shipVertices, cp.Vector{}, 0)))
-	space.AddShape(cp.NewPolyShape(body, 3, shipVertices, cp.NewTransformIdentity(), 0))
-	return &Ship{
-		ID:        id,
-		Physics:   body,
-		Thrusting: false,
-		Armed:     false,
+func (s shipPhysics) Step(dt float64) shipPhysics {
+	return shipPhysics{
+		TranslationalState: s.TranslationalState.Step(dt),
+		RotationalState:    s.RotationalState.Step(dt),
 	}
 }
-func (s *Ship) Update(table *flatbuffers.Table) {
+
+func (s shipPhysics) Lerp(to shipPhysics, delta float64) shipPhysics {
+	return shipPhysics{
+		TranslationalState: s.TranslationalState.Lerp(to.TranslationalState, delta),
+		RotationalState:    s.RotationalState.Lerp(to.RotationalState, delta),
+	}
+}
+
+type Ship struct {
+	shipPhysics
+	ID        entity.ID
+	health    int
+	bufferLen int
+	buffer    [InterpolationBuffer]shipPhysics
+	Thrusting bool
+	Armed     bool
+}
+
+func NewShip(id entity.ID) *Ship {
+	return &Ship{ID: id}
+}
+
+func (s *Ship) Update(timestamp time.Time, table *flatbuffers.Table) {
 	shipUpdate := new(downstream.Ship)
 	shipUpdate.Init(table.Bytes, table.Pos)
-	posn := shipUpdate.Position(new(downstream.Vector))
-	vel := shipUpdate.Velocity(new(downstream.Vector))
-	if shipUpdate.Name() != nil {
-		s.Name = string(shipUpdate.Name())
+	posn := tocpv(shipUpdate.Position(new(downstream.Vector)))
+	vel := tocpv(shipUpdate.Velocity(new(downstream.Vector)))
+	angle := float64(shipUpdate.Angle())
+	angularVel := float64(shipUpdate.AngularVelocity())
+	phys := shipPhysics{
+		timestamp: timestamp,
+		TranslationalState: physics.TranslationalState{
+			Position: posn,
+			Velocity: vel,
+		},
+		RotationalState: physics.RotationalState{
+			Angle:           angle,
+			AngularVelocity: angularVel,
+		},
 	}
-	s.Physics.SetPosition(cp.Vector{X: float64(posn.X()), Y: float64(posn.Y())})
-	s.Physics.SetVelocity(float64(vel.X()), float64(vel.Y()))
-	s.Physics.SetAngle(float64(shipUpdate.Angle()))
-	s.Physics.SetAngularVelocity(float64(shipUpdate.AngularVelocity()))
-	s.Thrusting = shipUpdate.Thrusting() > 0
-	s.Armed = shipUpdate.Armed() > 0
+	copy(s.buffer[1:], s.buffer[:])
+	s.buffer[0] = phys
+	if s.bufferLen == 0 {
+		s.shipPhysics = phys
+	}
+	if s.bufferLen < InterpolationBuffer {
+		s.bufferLen++
+	}
+	sort.SliceStable(s.buffer[:s.bufferLen], func(i, j int) bool {
+		return s.buffer[i].timestamp.After(s.buffer[j].timestamp)
+	})
+	//// interpolation
+	//if posn.DistanceSq(s.lastPos) < 1000 {
+	//	fmt.Println("lerping")
+	//	s.Physics.SetPosition(s.lastPos.Lerp(posn, delta))
+	//	s.Physics.SetVelocityVector(s.lastVel.Lerp(vel, delta))
+	//	s.Physics.SetAngle(cp.Lerp(s.lastAngle, angle, delta))
+	//	s.Physics.SetAngularVelocity(cp.Lerp(s.lastAngularVel, angularVel, delta))
+	//} else {
+	//	fmt.Println("jumping")
+	//	s.Physics.SetPosition(posn)
+	//	s.Physics.SetVelocityVector(vel)
+	//	s.Physics.SetAngle(angle)
+	//	s.Physics.SetAngularVelocity(angularVel)
+	//}
+	//s.lastPos = posn
+	//s.lastVel = vel
+	//s.lastAngle = angle
+	//s.lastAngularVel = angularVel
+	s.Thrusting = shipUpdate.Thrusting()
+	s.Armed = shipUpdate.Armed()
 	s.health = int(shipUpdate.Health())
 }
 
 func (s *Ship) Position() pixel.Vec {
-	return pixel.Vec(s.Physics.Position())
+	return pixel.Vec(s.TranslationalState.Position)
 }
 
 func (s *Ship) Health() int {
@@ -65,16 +115,44 @@ func (s *Ship) Health() int {
 
 var (
 	shipThrusterVertices = []pixel.Vec{{-8, -9}, {8, -9}, {0, -40}}
-	shipArmedVertex      = pixel.Vec{0, 8}
+	shipArmedVertex      = pixel.Vec{Y: 8}
 )
 
 func calcLabelY(theta float64) float64 {
 	return -12.7096*math.Sin(-2*(theta+3.75912)) + 44
 }
 
-func (s *Ship) Draw(canvas *pixelgl.Canvas, imd *imdraw.IMDraw) {
-	a := s.Physics.Angle()
-	p := pixel.Vec(s.Physics.Position())
+func (s *Ship) FixedUpdate() {
+	interpolationTime := time.Now().Add(-InterpolationBackTime)
+	if s.buffer[0].timestamp.After(interpolationTime) {
+		// INTERPOLATE
+		for i := 1; i <= s.bufferLen; i++ {
+			if s.buffer[i].timestamp.Before(interpolationTime) || i == s.bufferLen-1 {
+				newer := s.buffer[i-1]
+				older := s.buffer[i]
+
+				length := newer.timestamp.Sub(older.timestamp).Seconds()
+				var t float64
+				if length > 0.0001 {
+					t = interpolationTime.Sub(older.timestamp).Seconds() / length
+				}
+				s.shipPhysics = s.shipPhysics.Lerp(older.Lerp(newer, t), InterpolationBackTime.Seconds())
+				return
+			}
+
+		}
+	} else {
+		// EXTRAPOLATE (rough)
+		dt := time.Now().Sub(s.buffer[0].timestamp).Seconds()
+		newer := s.shipPhysics.Step(dt)
+		s.shipPhysics = s.shipPhysics.Lerp(s.buffer[0].Lerp(newer, InterpolationBackTime.Seconds()), InterpolationConstant)
+	}
+}
+
+func (s *Ship) Draw(_ *pixelgl.Canvas, imd *imdraw.IMDraw) {
+
+	a := s.Angle
+	p := pixel.Vec(s.TranslationalState.Position)
 	// draw thruster
 	if s.Thrusting {
 		imd.Color = color.RGBA{
@@ -110,15 +188,15 @@ func (s *Ship) Draw(canvas *pixelgl.Canvas, imd *imdraw.IMDraw) {
 		imd.Push(shipArmedVertex.Rotated(a).Add(p))
 		imd.Circle(8, 0)
 	}
-	// draw name
-	if s.Name != "" {
-		if s.text == nil {
-			s.text = text.New(pixel.Vec{}, fonts.Atlas)
-		}
-		s.text.Clear()
-		s.text.Write([]byte(s.Name))
-		s.text.Draw(canvas, pixel.IM.Moved(p.Sub(pixel.Vec{s.text.Bounds().W() / 2, -calcLabelY(s.Physics.Angle())})))
-		s.text.Clear()
-		//fmt.Println(s.Physics.Angle(), calcLabelY(s.Physics.Angle()))
-	}
+	//// draw name
+	//if s.Name != "" {
+	//	if s.text == nil {
+	//		s.text = text.New(pixel.Vec{}, fonts.Atlas)
+	//	}
+	//	s.text.Clear()
+	//	s.text.Write([]byte(s.Name))
+	//	s.text.Draw(canvas, pixel.IM.Moved(p.Sub(pixel.Vec{s.text.Bounds().W() / 2, -calcLabelY(s.Physics.Angle())})))
+	//	s.text.Clear()
+	//	//fmt.Println(s.Physics.Angle(), calcLabelY(s.Physics.Angle()))
+	//}
 }

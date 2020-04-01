@@ -6,7 +6,6 @@ import (
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
-	"github.com/jakecoffman/cp"
 	"golang.org/x/image/colornames"
 	"image/color"
 	"math"
@@ -16,24 +15,22 @@ type Target interface {
 }
 
 type System struct {
-	win      *pixelgl.Window
-	space    *cp.Space
-	handler  InputHandler
-	entities map[entity.ID]Renderable
-	camPos   pixel.Vec
-	camera   Camera
-	canvas   *pixelgl.Canvas
-	imd      *imdraw.IMDraw
+	win            *pixelgl.Window
+	handler        InputHandler
+	entities       map[entity.ID]Renderable
+	camPos         pixel.Vec
+	camera         Camera
+	canvas         *pixelgl.Canvas
+	imd            *imdraw.IMDraw
 }
 
-func New(win *pixelgl.Window, space *cp.Space, handler InputHandler) *System {
+func New(win *pixelgl.Window, handler InputHandler) *System {
 	return &System{
-		win:      win,
-		space:    space,
-		handler:  handler,
-		entities: make(map[entity.ID]Renderable),
-		canvas:   pixelgl.NewCanvas(win.Bounds().Moved(win.Bounds().Center().Scaled(-1))),
-		imd:      imdraw.New(nil),
+		win:            win,
+		handler:        handler,
+		entities:       make(map[entity.ID]Renderable),
+		canvas:         pixelgl.NewCanvas(win.Bounds().Moved(win.Bounds().Center().Scaled(-1))),
+		imd:            imdraw.New(nil),
 	}
 }
 
@@ -46,6 +43,8 @@ func (s *System) SetCamera(camera Camera) {
 }
 
 func (s *System) Update(delta float64) {
+	lerp := 1 - math.Pow(0.1, delta)
+
 	var targetPosn pixel.Vec
 	var health int
 	if s.camera != nil {
@@ -62,19 +61,20 @@ func (s *System) Update(delta float64) {
 	if s.win.Bounds() != s.canvas.Bounds() {
 		s.canvas.SetBounds(s.win.Bounds().Moved(s.win.Bounds().Center().Scaled(-1)))
 	}
-	s.camPos = pixel.Lerp(s.camPos, targetPosn, 1)
+	s.camPos = pixel.Lerp(s.camPos, targetPosn, lerp)
 	cam := pixel.IM.Moved(s.camPos.Scaled(-1))
 	s.canvas.SetMatrix(cam)
 	s.canvas.Clear(colornames.Black)
 	s.imd.Clear()
 	s.imd.Color = colornames.Darkgray
-	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 4)
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 8)
 	s.imd.Color = colornames.Gray
-	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 2)
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 4)
 	s.imd.Color = colornames.White
-	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 1)
-	for _, entity := range s.entities {
-		entity.Draw(s.canvas, s.imd)
+	stars.Draw(s.imd, s.camPos, s.canvas.Bounds(), 2)
+
+	for _, e := range s.entities {
+		e.Draw(s.canvas, s.imd)
 	}
 	s.imd.Draw(s.canvas)
 

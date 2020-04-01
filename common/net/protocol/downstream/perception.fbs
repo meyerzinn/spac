@@ -29,5 +29,6 @@ table Entity {
 }
 
 table Perception {
+    timestamp:int64;
     entities:[Entity];
 }

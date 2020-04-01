@@ -9,35 +9,50 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/jakecoffman/cp"
 	"sync"
+	"time"
+)
+
+const (
+	InterpolationBackTime = 100 * time.Millisecond
+	InterpolationConstant = 0.01
+	InterpolationBuffer = 10
 )
 
 type Updateable interface {
-	Update(*flatbuffers.Table)
+	Update(timestamp time.Time, data *flatbuffers.Table)
 }
 
 type System struct {
 	manager     *entity.Manager
-	space       *cp.Space
+	physics     *physics.System
 	perceptions chan *downstream.Perception
 	self        entity.ID
 	entitiesMu  sync.RWMutex
 	entities    map[entity.ID]Updateable
+	names       map[entity.ID]string
 }
 
-func New(manager *entity.Manager, space *cp.Space, self entity.ID /* latency *int64*/) *System {
+func New(manager *entity.Manager, phys *physics.System, self entity.ID, /* latency *int64*/) *System {
 	return &System{
 		manager:     manager,
-		space:       space,
+		physics:     phys,
 		self:        self,
 		perceptions: make(chan *downstream.Perception, 8),
 		entities:    make(map[entity.ID]Updateable),
+		names:       make(map[entity.ID]string),
 	}
 }
 
-func (s *System) Update(delta float64) {
+func (s *System) Update(float64) {
 	for {
 		select {
 		case p := <-s.perceptions:
+			n := len(s.perceptions)
+			if n != 0 {
+				for i := 0; i < n; i++ {
+					p = <-s.perceptions
+				}
+			}
 			s.processPerception(p)
 		default:
 			return
@@ -51,11 +66,11 @@ func (s *System) Perceive(perception *downstream.Perception) {
 
 func (s *System) processPerception(perception *downstream.Perception) {
 	known := make(map[entity.ID]struct{}, perception.EntitiesLength())
+	timestamp := time.Unix(0, perception.Timestamp())
 	for i := 0; i < perception.EntitiesLength(); i++ {
 		e := new(downstream.Entity)
 		if !perception.Entities(e, i) {
 			panic("failed to retrieve entity from perception vector")
-			continue
 		}
 		snapshotTable := new(flatbuffers.Table)
 		if !e.Snapshot(snapshotTable) {
@@ -64,39 +79,39 @@ func (s *System) processPerception(perception *downstream.Perception) {
 		known[e.Id()] = struct{}{}
 		updater, ok := s.entities[e.Id()]
 		if ok {
-			updater.Update(snapshotTable)
+			updater.Update(timestamp, snapshotTable)
 		} else {
 			id := e.Id()
 			var updater Updateable
 			switch e.SnapshotType() {
 			case downstream.SnapshotBullet:
-				bullet := NewBullet(s.space, id)
+				bullet := NewBullet(id)
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
-					case *physics.System:
-						sys.Add(id, bullet.Physics)
 					case *rendering.System:
 						//var lastPosn pixel.Vec
+						sys.Add(id, bullet)
+					case *physics.System:
 						sys.Add(id, bullet)
 					}
 				}
 				updater = bullet
 			case downstream.SnapshotShip:
-				ship := NewShip(s.space, id)
+				ship := NewShip(id)
 				for _, system := range s.manager.Systems() {
 					switch sys := system.(type) {
-					case *physics.System:
-						sys.Add(id, ship.Physics)
 					case *rendering.System:
 						sys.Add(id, ship)
 						if id == s.self {
 							sys.SetCamera(ship)
 						}
+					case *physics.System:
+						sys.Add(id, ship)
 					}
 				}
 				updater = ship
 			}
-			updater.Update(snapshotTable)
+			updater.Update(timestamp, snapshotTable)
 			s.entities[id] = updater
 		}
 	}
@@ -111,5 +126,12 @@ func (s *System) Remove(entity entity.ID) {
 	delete(s.entities, entity)
 	if entity == s.self {
 		fmt.Println("died")
+	}
+}
+
+func tocpv(vector *downstream.Vector) cp.Vector {
+	return cp.Vector{
+		X: float64(vector.X()),
+		Y: float64(vector.Y()),
 	}
 }

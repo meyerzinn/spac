@@ -5,6 +5,9 @@ import (
 	"github.com/20zinnm/entity"
 	"github.com/20zinnm/spac/common/net"
 	"github.com/20zinnm/spac/common/world"
+	"github.com/20zinnm/spac/server/bounding"
+	"github.com/20zinnm/spac/server/despawning"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/spac/server/movement"
 	"github.com/20zinnm/spac/server/networking"
 	"github.com/20zinnm/spac/server/perceiving"
@@ -15,9 +18,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-	"github.com/20zinnm/spac/server/bounding"
-	"github.com/20zinnm/spac/server/despawning"
-	"github.com/20zinnm/spac/server/health"
 )
 
 type server struct {
@@ -64,8 +64,10 @@ func Start(options ...Option) {
 	server := &server{
 		bind:   ":8080",
 		radius: 10000,
-		tick:   time.Second / 20,
+		tick:   time.Second / 60,
 		upgrader: &websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
@@ -90,10 +92,20 @@ func Start(options ...Option) {
 	go func() {
 		ticker := time.NewTicker(server.tick)
 		defer ticker.Stop()
-		start := time.Now()
-		for t := range ticker.C {
-			delta := t.Sub(start).Seconds()
-			start = t
+		last := time.Now()
+		skip := 0
+		for range ticker.C {
+			if len(ticker.C) > 0 {
+				skip++
+				continue // we're behind!
+			}
+			if skip > 0 {
+				fmt.Printf("Server lagging! Skipping %d ticks.", skip)
+				skip = 0
+			}
+			now := time.Now()
+			delta := now.Sub(last).Seconds()
+			last = now
 			manager.Update(delta)
 		}
 		fmt.Println("game stopped")

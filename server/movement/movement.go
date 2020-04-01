@@ -36,9 +36,13 @@ func (s *System) Update(delta float64) {
 		}
 		if e.last.Left != e.last.Right {
 			if e.last.Left {
-				e.physics.SetAngularVelocity(e.angular)
+				e.physics.ApplyForceAtLocalPoint(cp.Vector{X: -e.angular}, cp.Vector{Y: 1})
+				e.physics.ApplyForceAtLocalPoint(cp.Vector{X: e.angular}, cp.Vector{})
+				//e.physics.SetAngularVelocity(e.angular)
 			} else {
-				e.physics.SetAngularVelocity(-e.angular)
+				e.physics.ApplyForceAtLocalPoint(cp.Vector{X: e.angular}, cp.Vector{Y: 1})
+				e.physics.ApplyForceAtLocalPoint(cp.Vector{X: -e.angular}, cp.Vector{})
+				//e.physics.SetAngularVelocity(-e.angular)
 			}
 		}
 		if e.last.Thrusting {

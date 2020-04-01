@@ -1,9 +1,9 @@
 package bounding
 
 import (
-	"github.com/jakecoffman/cp"
-	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/server/health"
+	"github.com/jakecoffman/cp"
 	"math"
 )
 
@@ -28,9 +28,9 @@ func (s *System) Add(id entity.ID, physics *cp.Body, health *health.Component) {
 }
 
 func (s *System) Update(delta float64) {
-	for _, entity := range s.entities {
-		if !entity.Physics.Position().Near(cp.Vector{}, s.radius) {
-			entity.Health.Value -= damage(entity.Physics.Position().Length() - s.radius)
+	for _, e := range s.entities {
+		if !e.Physics.Position().Near(cp.Vector{}, s.radius) {
+			e.Health.Value -= damage(e.Physics.Position().Length() - s.radius)
 		}
 	}
 }
@@ -65,10 +65,10 @@ func (s *System) Remove(entity entity.ID) {
 //	}
 //}
 //
-//func (s *System) Add(id entity.ID, physics world.Component, health *damaging.Component, decay float64) {
+//func (s *System) Add(id entity.ID, constants world.Component, health *damaging.Component, decay float64) {
 //	s.entitiesMu.Lock()
 //	s.entities[id] = boundingEntity{
-//		Physics: physics,
+//		Physics: constants,
 //		Health:  health,
 //		Decay:   decay,
 //	}

@@ -2,6 +2,15 @@ package net
 
 import (
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
+	"time"
+)
+
+const (
+	PongWait       = 5 * time.Second
+	MaxMessageSize = 1024
+	WriteWait      = 5 * time.Second
+	PingPeriod     = 100 * time.Millisecond
 )
 
 // Connection provides a simple, generalized interface for networked connections in which there can be one reader and many writers.
@@ -29,15 +38,39 @@ func Websocket(conn *websocket.Conn) Connection {
 		done: make(chan struct{}),
 		out:  make(chan []byte),
 	}
+	conn.SetReadLimit(MaxMessageSize)
+	conn.SetPongHandler(connection.pongHandler)
 	go connection.writer()
 	return connection
 }
 
+func (c *WebsocketConnection) pongHandler(_ string) error {
+	return errors.Wrap(c.conn.SetReadDeadline(time.Now().Add(PongWait)), "setting read deadline after pong")
+}
+
 func (c *WebsocketConnection) writer() {
-	for message := range c.out {
-		if c.conn.WriteMessage(websocket.BinaryMessage, message) != nil {
-			close(c.done)
+	ticker := time.NewTicker(PingPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.done:
 			return
+		case message, ok := <-c.out:
+			c.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+			if !ok {
+				c.Close()
+				return
+			}
+
+			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+				c.Close()
+				return
+			}
+		case <-ticker.C:
+			if err := c.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(WriteWait)); err != nil {
+				c.Close()
+				return
+			}
 		}
 	}
 }
@@ -55,5 +88,7 @@ func (c *WebsocketConnection) Read() ([]byte, error) {
 }
 
 func (c *WebsocketConnection) Close() error {
+	close(c.done)
+	c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 	return c.conn.Close()
 }

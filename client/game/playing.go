@@ -10,7 +10,6 @@ import (
 	"github.com/20zinnm/spac/common/net/builders"
 	"github.com/20zinnm/spac/common/net/downstream"
 	"github.com/20zinnm/spac/common/net/upstream"
-	"github.com/20zinnm/spac/common/world"
 	"github.com/faiface/pixel/pixelgl"
 	"github.com/google/flatbuffers/go"
 	"os"
@@ -43,19 +42,14 @@ func (s *PlayingScene) Update(dt float64) {
 
 func (s *PlayingScene) writer(queue chan rendering.Inputs) {
 	last := rendering.Inputs{}
-	pinger := time.NewTicker(time.Second)
-	defer pinger.Stop()
 	for {
 		select {
-		case <-pinger.C:
-			sendPing(s.conn, time.Now().UnixNano())
 		case i, ok := <-queue:
 			if !ok {
 				return
 			}
 			if i != last {
 				sendControls(s.conn, i)
-				fmt.Println("sending controls")
 				last = i
 			}
 		}
@@ -77,10 +71,6 @@ func (s *PlayingScene) reader() {
 			fmt.Println("error decoding message; skipping")
 		}
 		switch message.PacketType() {
-		case downstream.PacketPong:
-			pong := new(downstream.Pong)
-			pong.Init(packetTable.Bytes, packetTable.Pos)
-			//atomic.SwapInt64(&s.latency, time.Now().UnixNano()-pong.Timestamp())
 		case downstream.PacketPerception:
 			perception := new(downstream.Perception)
 			perception.Init(packetTable.Bytes, packetTable.Pos)
@@ -101,12 +91,13 @@ func NewPlaying(win *pixelgl.Window, conn net.Connection, self entity.ID) *Playi
 		manager: manager,
 		next:    make(chan Scene),
 	}
-	w := world.NewSpace()
-	scene.perceiving = perceiving.New(manager, w, self)
+	phys := physics.New()
+	manager.AddSystem(phys)
+	scene.perceiving = perceiving.New(manager, phys, self)
 	manager.AddSystem(scene.perceiving)
-	manager.AddSystem(physics.New(w))
 	inputsQueue := make(chan rendering.Inputs, 16)
-	manager.AddSystem(rendering.New(win, w, rendering.InputHandlerFunc(func(i rendering.Inputs) {
+	manager.AddSystem(physics.New())
+	manager.AddSystem(rendering.New(win, rendering.InputHandlerFunc(func(i rendering.Inputs) {
 		inputsQueue <- i
 	})))
 	go scene.writer(inputsQueue)
@@ -118,24 +109,9 @@ func sendControls(conn net.Connection, inputs rendering.Inputs) {
 	b := builders.Get()
 	defer builders.Put(b)
 	upstream.ControlsStart(b)
-	upstream.ControlsAddLeft(b, boolToByte(inputs.Left))
-	upstream.ControlsAddRight(b, boolToByte(inputs.Right))
-	upstream.ControlsAddThrusting(b, boolToByte(inputs.Thrust))
-	upstream.ControlsAddShooting(b, boolToByte(inputs.Shoot))
+	upstream.ControlsAddLeft(b, inputs.Left)
+	upstream.ControlsAddRight(b, inputs.Right)
+	upstream.ControlsAddThrusting(b, inputs.Thrust)
+	upstream.ControlsAddShooting(b, inputs.Shoot)
 	conn.Write(net.MessageUp(b, upstream.PacketControls, upstream.ControlsEnd(b)))
-}
-
-func sendPing(conn net.Connection, time int64) {
-	b := builders.Get()
-	defer builders.Put(b)
-	upstream.PingStart(b)
-	upstream.PingAddTimestamp(b, time)
-	conn.Write(net.MessageUp(b, upstream.PacketPing, upstream.PingEnd(b)))
-}
-
-func boolToByte(val bool) byte {
-	if val {
-		return 1
-	}
-	return 0
 }

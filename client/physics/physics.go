@@ -1,33 +1,44 @@
 package physics
 
 import (
-	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/common/constants"
 	"github.com/jakecoffman/cp"
 )
 
-type System struct {
-	space    *cp.Space
-	entities map[entity.ID]*cp.Body
+type TranslationalState struct {
+	Position cp.Vector
+	Velocity cp.Vector
 }
 
-func New(space *cp.Space) *System {
-	return &System{
-		space:    space,
-		entities: make(map[entity.ID]*cp.Body),
+func (t TranslationalState) Step(dt float64) TranslationalState {
+	return TranslationalState{
+		Position: t.Position.Add(t.Velocity.Mult(dt)),
+		Velocity: t.Velocity.Mult(constants.Damping),
 	}
 }
 
-func (s *System) Update(delta float64) {
-	s.space.Step(delta)
+func (t TranslationalState) Lerp(to TranslationalState, delta float64) TranslationalState {
+	return TranslationalState{
+		Position: t.Position.Lerp(to.Position, delta),
+		Velocity: t.Velocity.Lerp(to.Velocity, delta),
+	}
 }
 
-func (s *System) Add(entity entity.ID, component *cp.Body) {
-	s.entities[entity] = component
+type RotationalState struct {
+	Angle           float64
+	AngularVelocity float64
 }
 
-func (s *System) Remove(entity entity.ID) {
-	if body, ok := s.entities[entity]; ok {
-		s.space.RemoveBody(body)
-		delete(s.entities, entity)
+func (r RotationalState) Step(dt float64) RotationalState {
+	return RotationalState{
+		Angle:           r.Angle + r.AngularVelocity * dt,
+		AngularVelocity: r.AngularVelocity * (constants.Damping),
+	}
+}
+
+func (r RotationalState) Lerp(to RotationalState, delta float64) RotationalState {
+	return RotationalState{
+		Angle:           cp.Lerp(r.Angle, to.Angle, delta),
+		AngularVelocity: cp.Lerp(r.AngularVelocity, to.AngularVelocity, delta),
 	}
 }

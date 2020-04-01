@@ -1,5 +1,0 @@
-namespace spac.upstream;
-
-table Ping {
-    timestamp:int64;
-}

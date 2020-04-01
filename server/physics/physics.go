@@ -32,12 +32,25 @@ func (s *System) Add(entity entity.ID, body *cp.Body) {
 
 func (s *System) Remove(entity entity.ID) {
 	if body, ok := s.entities[entity]; ok {
+		body.EachShape(func(shape *cp.Shape) {
+			s.space.RemoveShape(shape)
+		})
 		s.space.RemoveBody(body)
 		delete(s.entities, entity)
 	}
 }
 
 func (s *System) Debug(w io.Writer) {
-	fmt.Fprintln(w, "physics system")
+	fmt.Fprintln(w, "constants system")
 	fmt.Fprintf(w, "entities=%d\n", len(s.entities))
+	bodies := 0
+	s.space.EachBody(func(body *cp.Body) {
+		bodies++
+	})
+	fmt.Fprintf(w, "bodies=%d\n", bodies)
+	shapes := 0
+	s.space.EachShape(func(shape *cp.Shape) {
+		shapes++
+	})
+	fmt.Fprintf(w, "shapes=%d\n", shapes)
 }

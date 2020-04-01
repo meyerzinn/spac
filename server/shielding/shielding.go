@@ -1,9 +1,10 @@
 package shielding
 
 import (
-	"github.com/20zinnm/spac/server/health"
 	"github.com/20zinnm/entity"
+	"github.com/20zinnm/spac/server/health"
 	"github.com/jakecoffman/cp"
+	"math"
 )
 
 type Component struct {
@@ -43,9 +44,26 @@ type System struct {
 func (s *System) Update(delta float64) {
 	for _, e := range s.entities {
 		select {
-		case n := <-e.controller:
-			if e.shielding != n {
+		case e.shielding = <-e.controller:
+			if e.shielding {
+				if e.activation < e.component.Delay {
+					e.activation++
+				} else {
+					if e.active {
+						// reduce shield health
+						e.component.Health.Value = math.Max(0, e.component.Health.Value-e.component.Decay)
+						if e.component.Health.Value <= 0 {
+							e.active = false
+							e.physics.RemoveShape(e.shield)
+						}
+					} else {
+
+					}
+				}
+			} else {
+				e.activation = 0
 				if e.active {
+
 				}
 			}
 		default:
